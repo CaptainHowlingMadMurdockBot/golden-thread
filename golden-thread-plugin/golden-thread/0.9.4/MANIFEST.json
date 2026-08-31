@@ -41,8 +41,16 @@
    "sha256": "33dc7d37edee740cf06a60dea8f74c8d0832e70a392b07010a4d9a07aa7a1eab"
   },
   "scripts/gt_settings.py": {
+   "bytes": 7887,
+   "sha256": "35c559c236f7c38c184f60bc02398d09761184b30a8a1fb04d765b1ac94ffcc8"
+  },
+  "scripts/gt_settings.py.bak_20260830": {
    "bytes": 6679,
    "sha256": "92199129cf2ee3f98a88531213c6915cab8f7b1c684ad1411c1e11648c53d9b1"
+  },
+  "scripts/gt_version_check.py": {
+   "bytes": 7005,
+   "sha256": "fc822e4b34418a9eea6940f9d0ca684a376238fc333f8a2e8023e2a1212b10c3"
   },
   "scripts/gt_workers.py": {
    "bytes": 11564,
@@ -145,6 +153,6 @@
    "sha256": "7a9ef20b5b12ff7ce5e4c859467624bcb9bffaa7d51b5ab3b068feaf53c29ecd"
   }
  },
- "generated": "2026-08-29T15:51:24",
+ "generated": "2026-08-30T14:43:03",
  "version": "0.9.4"
 }
