@@ -20,7 +20,11 @@ Read `~/.claude/vault-config.json`. If it exists and the vault path is a real di
 **Step 2 — Gather vault info (fresh install only)**
 
 Ask:
-1. "Where should the vault live? (default: `~/Documents/Obsidian/GoldenThreadVault`)"
+1. "Do you already have an Obsidian vault on this machine?"
+   - If YES → "What is the path to your vault?" (no default; let them type it)
+     Then tell them: "Golden Thread will only add files that are missing — your existing notes will not be touched."
+   - If NO → "Where would you like to create the vault? (default: `~/Documents/Obsidian/GoldenThreadVault`)"
+     Then tell them: "Obsidian is optional — the vault is plain Markdown files and works without it. But if you plan to use Obsidian, point this at your vault folder."
 2. "What's your domain or team name? (e.g. 'Platform Engineering', 'Personal', 'Acme Engineering') — used to customize the vault schema"
 
 **Step 3 — Gather project info**
