@@ -29,8 +29,8 @@
    "sha256": "a728c8b60714bfe670cdb9d3056c94968c4b8aa7790d751b9aba6ef753267a45"
   },
   "scripts/gt_lint.py": {
-   "bytes": 32303,
-   "sha256": "dc16f7bf3f2165c9b84272d05effd9868b44e27de600cefe1365873f470502cd"
+   "bytes": 32301,
+   "sha256": "8ee327a0917a9ecf643be2dc7666258140592672c756462702a29b5f545135be"
   },
   "scripts/gt_paths.py": {
    "bytes": 4144,
@@ -153,14 +153,14 @@
    "sha256": "16c54f56ccf0e311d28240c8b7424a0b4b359c9ab9c6552a21f84ad1ccf00096"
   },
   "templates/tools/safe_write.py": {
-   "bytes": 11643,
-   "sha256": "f6116a4c8685d6d7a891fd6ed8d2c887edef07994bd5dcb1df6f3753a175c762"
+   "bytes": 11625,
+   "sha256": "be3ab95ccdbda285887f9274e19d1374dc7a8d313eea24564084dcde768cb204"
   },
   "templates/wiki-CLAUDE.md": {
    "bytes": 4243,
    "sha256": "7a9ef20b5b12ff7ce5e4c859467624bcb9bffaa7d51b5ab3b068feaf53c29ecd"
   }
  },
- "generated": "2026-09-02T07:42:05",
+ "generated": "2026-09-05T10:56:06",
  "version": "0.9.6"
 }
