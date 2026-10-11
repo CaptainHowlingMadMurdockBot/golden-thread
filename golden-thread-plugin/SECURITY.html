@@ -102,7 +102,7 @@
   body{max-width:52rem;margin:0 auto;padding:2.2rem 2rem;}
   h1,h2,h3{break-after:avoid;} table{break-inside:avoid;}
 </style></head><body><h1 id="gt-security-guide-gt-unlock-and-gt-sandbox-mode">gt security guide — gt unlock and gt sandbox mode</h1>
-<p>Written against <strong>gt v0.20.1</strong> (gt-lotr 0.3.0). Unlock and sandbox mode both ship <strong>off</strong>. This
+<p>Written against <strong>gt v0.21.0</strong> (gt-lotr 0.4.1); sections 1-9 describe 0.20.x and still hold, and section 10 adds what 0.21.0 brought. Unlock and sandbox mode both ship <strong>off</strong>. This
 guide says what each does when you turn it on, what it needs, how to set it up on macOS, Windows
 and Linux, and — just as plainly — what it does not protect. gt sandbox mode, which fences the
 assistant's own shell and file tools off the vault and gt's state, is section 8. MCP servers Claude
@@ -854,7 +854,7 @@ python $u verify
 <li><strong>Check it:</strong> <code>gt_unlock.py status</code>, <code>gt_unlock.py verify</code>, <code>gt_unlock.py audit -n 50</code>.</li>
 </ul>
 <h2 id="7a-lockdown-levels-how-much-claude-may-run-without-asking-0205">7a. Lockdown levels: how much Claude may run without asking (0.20.5)</h2>
-<p>How much Claude may run without asking. Most of the friction in a session is approval prompts; a lockdown level is a set of Claude Code allow rules that gt writes into <code>~/.claude/settings.json</code> for the level <strong>you</strong> choose, so routine work stops asking. The installer asks for it (<code>./install.sh --lockdown &lt;level&gt;</code> to answer in advance; with no terminal a new install stays very secure and an upgrade keeps its level). Change it any time with <code>/gt:gt-settings lockdown &lt;level&gt;</code> (<code>gt_settings.py set lockdown &lt;level&gt;</code>), then restart Claude Code. gt writes and removes only its own rules, records them, backs <code>settings.json</code> up first and logs every change (<code>~/.claude/golden-thread/lockdown/</code>); uninstall takes them out. With gt unlock on, changing the level needs a fresh confirmation. gt never changes the level by itself.</p>
+<p>How much Claude may run without asking. Most of the friction in a session is approval prompts; a lockdown level is a set of Claude Code allow rules that gt writes into <code>~/.claude/settings.json</code> for the level <strong>you</strong> choose, so routine work stops asking. The installer asks for it (<code>./install.sh --lockdown &lt;level&gt;</code> to answer in advance; with no terminal a new install stays strict and an upgrade keeps its level). Change it any time with <code>/gt:gt-settings lockdown &lt;level&gt;</code> (<code>gt_settings.py set lockdown &lt;level&gt;</code>), then restart Claude Code. gt writes and removes only its own rules, records them, backs <code>settings.json</code> up first and logs every change (<code>~/.claude/golden-thread/lockdown/</code>); uninstall takes them out. With gt unlock on, changing the level needs a fresh confirmation. gt never changes the level by itself.</p>
 <!-- lockdown-chart:start -->
 <table>
 <thead>
@@ -866,30 +866,31 @@ python $u verify
 </thead>
 <tbody>
 <tr>
-<td><strong>very secure</strong></td>
+<td><strong>strict</strong></td>
 <td>nothing added -- exactly what Claude Code asks today (default)</td>
 <td>everything Claude Code asks today</td>
 </tr>
 <tr>
-<td><strong>mostly secure</strong></td>
+<td><strong>trust local</strong></td>
 <td>read-only shell (ls, cat, grep, wc, ...) and git (status, log, diff, show, branch); edits in the project; running tests; git add/commit</td>
 <td>network, remote hosts, pushes, installs, deletes, anything not listed</td>
 </tr>
 <tr>
-<td><strong>partly secure</strong></td>
-<td>mostly secure, plus ssh/scp/rsync, git push/pull/fetch, curl/wget, npm/pip/brew install, web fetch</td>
+<td><strong>trust network</strong></td>
+<td>trust local, plus ssh/scp/rsync, git push/pull/fetch, curl/wget, npm/pip/brew install, web fetch</td>
 <td>any other shell command or edit outside the project</td>
 </tr>
 <tr>
 <td><strong>insecure</strong></td>
-<td>partly secure, plus any shell command, any edit, web search</td>
+<td>trust network, plus any shell command, any edit, web search</td>
 <td>LOTR send/merge/delete still ask for consent</td>
 </tr>
 </tbody>
 </table>
-<p>At every level above very secure, Claude's Read tool is denied credential files (ssh keys, cloud and gh credentials, Claude Code's login, .env). That guards the Read tool only: from mostly secure up a shell command can still print a file, so Core rule 3 (no secret's value in the session) remains the line. These levels reduce prompts; they are not a security boundary.</p>
+<p>At every level above strict, Claude's Read tool is denied credential files (ssh keys, cloud and gh credentials, Claude Code's login, .env). That guards the Read tool only: from trust local up a shell command can still print a file, so Core rule 3 (no secret's value in the session) remains the line. These levels reduce prompts; they are not a security boundary.</p>
 <!-- lockdown-chart:end -->
 
+<p><strong>Paranoid, the top rung (0.21.0).</strong> The ladder offers a fifth choice, <code>paranoid</code>: strict, plus the <code>paranoid</code> switch that locks gt's own installed code (section 10.1). It is not a stored level. Choosing it applies strict and turns the switch on, and it shows as paranoid whenever both hold. Leaving it for another level turns the switch off, with the step-up that already needs: gt unlock, or a person at a terminal. Turning it on needs gt unlock set up first, unless <code>paranoid.require_unlock</code> is off. The installer no longer asks the separate paranoid question. <code>--paranoid on|off</code> still sets the switch on its own, for example trust-local plus paranoid; <code>--lockdown paranoid --paranoid off</code> is refused.</p>
 <h2 id="8-gt-sandbox-mode">8. gt sandbox mode</h2>
 <p><code>gt_settings.py set sandbox_mode on</code> (off by default). gt then configures <strong>Claude Code's own
 sandbox and permission rules</strong> so that the assistant's shell and file tools cannot touch the
@@ -1390,5 +1391,108 @@ tool, not against a hostile process with your access.</p>
   real provider has been run. Linear (dynamic registration, no flags) is the provider the live check
   is written for: <code>dev/oauth-live-check-linear.md</code>.</li>
 </ul>
+<h2 id="10-gt-0210-installed-code-integrity-action-tokens-io-brokers-the-testing-profile">10. gt 0.21.0: installed-code integrity, action tokens, I/O brokers, the testing profile</h2>
+<p>Four additions, each a setting with a plain reading of what it protects and what it costs. None
+changes behaviour when it is off. None is a defence against something already running as you that can
+wait for you to approve.</p>
+<h3 id="101-the-paranoid-group-protecting-gts-own-code">10.1 The <code>paranoid</code> group: protecting gt's own code</h3>
+<p><code>paranoid</code> (off by default) answers "can something quietly rewrite the programs that keep the assistant
+in check?" It acts on gt's installed <strong>code</strong> only (hooks, packs, the plugin cache and the marketplace);
+working data is never locked. Each part follows the master unless set, and is a security setting:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>paranoid.os_lock</code></td>
+<td><code>uchg</code> (macOS), read-only plus an ACE (Windows) or <code>a-w</code> (Linux) on the installed code; bytecode is compiled first</td>
+</tr>
+<tr>
+<td><code>paranoid.code_write_gate</code></td>
+<td>the presence gate <code>gt-code-write</code> (scope <code>gt:code:write</code>): the installer, component self-repair and uninstall unlock through it</td>
+</tr>
+<tr>
+<td><code>paranoid.bash_guard</code></td>
+<td>a PreToolUse(Bash) guard that asks or denies (never allows) writes and flag changes to protected paths</td>
+</tr>
+<tr>
+<td><code>paranoid.signed_manifest</code></td>
+<td>each hook verifies a signed manifest of its own files before it runs (about 0.45 ms) and fails closed if they were tampered with; signed by the unlock key, else pinned and labelled weaker</td>
+</tr>
+<tr>
+<td><code>paranoid.plugin_dirs</code>, <code>paranoid.require_unlock</code></td>
+<td>the plugin cache and marketplace under the same protection; refuse to turn paranoid on until unlock is set up</td>
+</tr>
+</tbody>
+</table>
+<p><code>gt_integrity.py status</code>, <code>gt_settings.py show</code> and <code>gt_doctor</code> read <code>paranoid (partial)</code> when a part is off,
+and the doctor has an <code>integrity</code> row. <strong>Limits:</strong> an owner who unlocks can change anything; a process that
+runs as you while the code is unlocked can too.</p>
+<h3 id="102-single-use-action-tokens">10.2 Single-use action tokens</h3>
+<p><code>paranoid.action_tokens</code> makes each listed action need a token you mint for that one action:</p>
+<p><code>disk_read</code>, <code>disk_list</code>, <code>net_fetch</code>, <code>disk_write</code>, <code>lotr_read</code>, <code>lotr_write</code>, <code>lotr_consent</code>, <code>vault_read</code>,
+<code>vault_write</code>, <code>secrets_unseal</code>, <code>git_push</code>, <code>git_commit</code>, <code>publish</code>, <code>grant_add</code>, <code>plan_bound</code>
+(each is <code>paranoid.action_tokens.&lt;action&gt;</code>, default <code>follow</code>, so the master decides until you set one).</p>
+<pre><code class="language-bash">python3 ~/.claude/golden-thread/hooks/gt_action_token.py mint &lt;action&gt; &lt;target&gt;      # in a terminal; asks for presence
+python3 ~/.claude/golden-thread/hooks/gt_action_token.py mint-plan &lt;plan.json&gt;       # an approved plan, one confirmation
+</code></pre>
+<p>A token is HMAC-signed, bound to the action, the <strong>exact target</strong> and the content, expires in minutes and
+is <strong>spent once</strong> by an atomic rename. Replay, retarget, expiry and forgery are refused, and the refusal
+names the mint command as the route. The assistant is given only the token's id. Hooks that run a
+command read the token from the <strong><code>GT_ACTION_TOKEN</code></strong> environment variable, which is never stored. The
+audit chain is keyed and holds no values (<code>gt_action_token.py verify</code>). <strong>Exemption:</strong> gt-lotr's own
+daemon unsealing its own credentials is exempt from <code>secrets_unseal</code>, because it is gt acting for the
+gateway rather than the assistant asking. Doctor skips the write-queue smoke checks while the
+<code>vault_write</code> token is required.</p>
+<h3 id="103-io-brokers-the-assistants-disk-and-network-one-capability-each">10.3 I/O brokers: the assistant's disk and network, one capability each</h3>
+<table>
+<thead>
+<tr>
+<th>Tool (gt-vault MCP)</th>
+<th>Agent</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>disk_read</code>, <code>disk_list</code></td>
+<td><code>disk-reader</code></td>
+<td>free inside the repositories a project's <code>source.md</code> names; elsewhere presence, or a live timed window; real path resolved first; credential-shaped text withheld</td>
+</tr>
+<tr>
+<td><code>net_fetch</code></td>
+<td><code>net-fetcher</code></td>
+<td>GET only, no cookies or credentials; <code>io_fetch_allow</code> domains served, other public domains ask presence; private, loopback, link-local and metadata addresses never; every DNS answer checked, connection pinned, redirects re-checked</td>
+</tr>
+<tr>
+<td><code>disk_write</code></td>
+<td><code>disk-writer</code></td>
+<td>one text file inside a git work tree; presence on <strong>every</strong> write or a timed window for one repo; backup first; never executable; no commit, push or subprocess</td>
+</tr>
+</tbody>
+</table>
+<p><code>disk_write</code> never writes <code>~/.claude</code>, shell start-up files, LaunchAgents/Daemons, <code>~/.ssh</code>, any <code>.git</code>
+component, <code>.env</code> / <code>*.env</code> or key files, <code>.envrc</code>, <code>.gitattributes</code>, <code>.gitmodules</code>, credential
+dotfiles or the vault, and refuses CI workflow files unless the owner sets <code>io_write_ci=allow</code>. It also
+refuses when no presence method is enrolled and Claude Code is set to run the tool without asking. An
+independent review of the write path produced seven fixes (a work-tree root of <code>/</code> or home, executable
+overwrite, <code>*.env</code>, case-insensitive matching, Windows alternate data streams and UNC roots, a prompt
+cool-down); two Windows/POSIX race windows remain documented. The gates <code>io.read</code>, <code>io.fetch</code> and <code>io.write</code>
+are always on; <code>io_write_presence</code> cannot be turned off.</p>
+<h3 id="104-the-testing-profile">10.4 The testing profile</h3>
+<p><code>gt_settings.py testing on</code> pre-approves test runners, static scanners and gt's own dev test commands for one
+project so an unattended run stops asking. It records exactly what it added, backs up first, and <code>off</code>
+removes only that. It never writes modes, hooks, skip-permissions or <code>GT_TEST_GATE</code>, so every Core-rule gate
+(the vault-write guard, the secrets Stop hook) is untouched.</p>
+<h3 id="105-hooks-and-the-install">10.5 Hooks and the install</h3>
+<p>Since 0.21.0 gt's hooks ship in each plugin's <code>hooks/hooks.json</code> and dispatch through
+<code>~/.claude/golden-thread/wired/</code> (Claude Code 2.1.136 and newer; older versions keep <code>settings.json</code>
+entries pointing into <code>~/.claude/golden-thread/hooks/</code>). A new install <strong>asks the security questions
+first</strong> (<code>install.sh --questions</code>); not at a terminal it exits 5 rather than take a security default
+silently, and <code>--accept-defaults</code> is the explicit opt-out.</p>
 </body>
 </html>

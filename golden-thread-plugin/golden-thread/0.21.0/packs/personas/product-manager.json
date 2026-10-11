@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "name": "product-manager",
+  "title": "Product manager",
+  "description": "A status board, a roadmap and a stakeholders list beside the standard project files.",
+  "audience": "Plain language: lead with status, risks and the decisions needed; say what it means for users and the roadmap; no code unless asked.",
+  "scaffold": {
+    "files": [
+      {"path": "status-board.md", "content": "# {TITLE} status board\n\n<!-- Where the work stands this week. Keep it current; move history to research.md. -->\n\n| Workstream | Owner | Status | Next step | Due |\n|---|---|---|---|---|\n\n## Risks and blockers\n\n"},
+      {"path": "roadmap.md", "content": "# {TITLE} roadmap\n\n<!-- Milestones in order. One line each: date, outcome, owner. -->\n\n## Now\n\n## Next\n\n## Later\n\n"},
+      {"path": "stakeholders.md", "content": "# {TITLE} stakeholders\n\n<!-- Who needs to know, who decides, who is waiting on whom. -->\n\n| Name | Role | Interest | Contact cadence |\n|---|---|---|---|\n\n"}
+    ],
+    "sections": []
+  },
+  "pane": [
+    {"label": "Start my day", "prompt": "Start my day: show what is waiting for me, what is overdue and what I should do first."},
+    {"label": "Overdue", "prompt": "Show my overdue tasks."},
+    {"label": "What is waiting", "prompt": "What handoffs and tasks are waiting for me?"},
+    {"label": "Add a task", "prompt": "I want to add a task. Ask me what it is and which project it belongs to."},
+    {"label": "Update roadmap", "prompt": "Help me update the roadmap for the project we are in."},
+    {"label": "Stakeholder update", "prompt": "Draft a short update for the stakeholders of this project."},
+    {"label": "Note a decision", "prompt": "Write down a decision. Ask me what was decided and why."},
+    {"label": "Open a project", "prompt": "Open a project for me. Ask me which one."},
+    {"label": "Sort my inbox", "prompt": "Review my inbox and file each item into the right project."},
+    {"label": "Write a handoff", "prompt": "Write a handoff for the next session so nothing is lost."},
+    {"label": "Find in my notes", "prompt": "Look something up in my notes. Ask me what I am looking for."},
+    {"label": "Save learnings", "prompt": "Write down what we learned in this session."}
+  ]
+}

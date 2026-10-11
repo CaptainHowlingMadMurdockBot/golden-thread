@@ -3,7 +3,7 @@
 > **Reader:** installing for the first time, or verifying a fork
 > **Claims last checked against the code:** 2026-10-04 (0.20.1) — see *The documents, and what belongs in each* in [`CLAUDE.md`](../CLAUDE.md).
 
-**Requirements:** Python 3.8+, Claude Code (any version).
+**Requirements:** Python 3.8+, Claude Code (any version; 2.1.136 or newer uses the plugin hook route, 2.1.287 or newer is needed for the gt pane).
 
 ---
 
@@ -102,6 +102,7 @@ tree you have, with each one's state and why; at the time of writing they are:
 | `flow` | `gt-flow` | on | `/gt-flow:gt-flow`, an offline HTML timeline of knowledge moving up the ladder |
 | `visualize` | `gt-visualize` | on | `/gt-visualize:gt-visualize`, a codebase in 3D — how-it-works walkthrough or code city (three.js inlined) |
 | `usage` | `gt-usage` | on | `/gt-usage:gt-usage`, the plan-allowance meter (5-hour, weekly and spend windows) |
+| `pane` | `gt-pane` | asked (0.21.0) | `/gt-pane:gt-pane` and `/gt-pane-buttons`: a 28-column pane of 12 plain-words buttons you can reorder, rename, add and remove (Claude Code 2.1.287 or newer) |
 | `farm` | `gt-farm` | **off** | `/gt-farm:gt-farm`, work packets for an external AI service |
 | `lotr` | `gt-lotr` | **off** | `/gt-lotr:gt-lotr`, one MCP gateway in front of GitHub, Jira, Microsoft 365 and others |
 
@@ -215,18 +216,59 @@ migrations still pending; `/gt:gt-upgrade` applies them.
 
 ## Lockdown level: asked at install (0.20.5)
 
-How much Claude may run without asking. Most of the friction in a session is approval prompts; a lockdown level is a set of Claude Code allow rules that gt writes into `~/.claude/settings.json` for the level **you** choose, so routine work stops asking. The installer asks for it (`./install.sh --lockdown <level>` to answer in advance; with no terminal a new install stays very secure and an upgrade keeps its level). Change it any time with `/gt:gt-settings lockdown <level>` (`gt_settings.py set lockdown <level>`), then restart Claude Code. gt writes and removes only its own rules, records them, backs `settings.json` up first and logs every change (`~/.claude/golden-thread/lockdown/`); uninstall takes them out. With gt unlock on, changing the level needs a fresh confirmation. gt never changes the level by itself.
+How much Claude may run without asking. Most of the friction in a session is approval prompts; a lockdown level is a set of Claude Code allow rules that gt writes into `~/.claude/settings.json` for the level **you** choose, so routine work stops asking. The installer asks for it (`./install.sh --lockdown <level>` to answer in advance; with no terminal a new install stays strict and an upgrade keeps its level). Change it any time with `/gt:gt-settings lockdown <level>` (`gt_settings.py set lockdown <level>`), then restart Claude Code. gt writes and removes only its own rules, records them, backs `settings.json` up first and logs every change (`~/.claude/golden-thread/lockdown/`); uninstall takes them out. With gt unlock on, changing the level needs a fresh confirmation. gt never changes the level by itself.
 
 <!-- lockdown-chart:start -->
 | Level | Runs without a prompt | Still asks |
 |---|---|---|
-| **very secure** | nothing added -- exactly what Claude Code asks today (default) | everything Claude Code asks today |
-| **mostly secure** | read-only shell (ls, cat, grep, wc, ...) and git (status, log, diff, show, branch); edits in the project; running tests; git add/commit | network, remote hosts, pushes, installs, deletes, anything not listed |
-| **partly secure** | mostly secure, plus ssh/scp/rsync, git push/pull/fetch, curl/wget, npm/pip/brew install, web fetch | any other shell command or edit outside the project |
-| **insecure** | partly secure, plus any shell command, any edit, web search | LOTR send/merge/delete still ask for consent |
+| **strict** | nothing added -- exactly what Claude Code asks today (default) | everything Claude Code asks today |
+| **trust local** | read-only shell (ls, cat, grep, wc, ...) and git (status, log, diff, show, branch); edits in the project; running tests; git add/commit | network, remote hosts, pushes, installs, deletes, anything not listed |
+| **trust network** | trust local, plus ssh/scp/rsync, git push/pull/fetch, curl/wget, npm/pip/brew install, web fetch | any other shell command or edit outside the project |
+| **insecure** | trust network, plus any shell command, any edit, web search | LOTR send/merge/delete still ask for consent |
 
-At every level above very secure, Claude's Read tool is denied credential files (ssh keys, cloud and gh credentials, Claude Code's login, .env). That guards the Read tool only: from mostly secure up a shell command can still print a file, so Core rule 3 (no secret's value in the session) remains the line. These levels reduce prompts; they are not a security boundary.
+At every level above strict, Claude's Read tool is denied credential files (ssh keys, cloud and gh credentials, Claude Code's login, .env). That guards the Read tool only: from trust local up a shell command can still print a file, so Core rule 3 (no secret's value in the session) remains the line. These levels reduce prompts; they are not a security boundary.
 <!-- lockdown-chart:end -->
+
+## What an install asks, in order (0.21.0)
+
+`bash install.sh --questions [--json]` prints every question and installs nothing. Security comes
+first. Each answer is a flag, or a key in `--answers FILE` (the JSON the listing prints):
+
+| # | Question | Flag | Default |
+|---|---|---|---|
+| 1 | How much may Claude do without asking? | `--lockdown strict\|trust-local\|trust-network\|insecure\|paranoid` | strict |
+| 2 | Fence Claude's shell off the vault and gt's files? | `--sandbox-mode off\|on` | off |
+| 3 | Lock gt's installed files? Not asked: the `paranoid` level answers it; the flag still combines it with a lower level | `--paranoid off\|on` | off |
+| 4 | Quality against token cost | `--token-profile minimum\|calibrated\|maximum` | calibrated |
+| 5 | Which model size for gt's skills? | `--model-profile average\|very-high\|inherit` | average |
+| 6 | Your role | `--persona` | none |
+| 7 | Shape drafts and summaries for that role? | `--persona-aligned on\|off` | on |
+| 8 | How long should replies be? | `--reply-length normal\|brief\|terse` | normal |
+| 9 | Compact idle sessions while the cache is warm? | `--expiry-guard auto\|warn-only\|off` | set by the token profile (auto when calibrated) |
+| 10 | gt-usage's status line? | `--statusline` | no |
+| 11 | ast-grep for code search? | `--ast-grep` | no |
+| 12 | Add the gt button pane? | `--with pane` / `--without pane` | no (yes for plain-mode roles) |
+| 13 | Open the guide? | `--open-guide` | yes at a terminal; skipped in CI, SSH and headless runs |
+
+**Not at a terminal**, a *new* install with a security question (1-3) unanswered **exits 5** before
+installing and names the flags to pass. `--accept-defaults` takes the defaults on purpose (CI); the
+summary lists each choice as yours, chosen for you, or NOT applied. An upgrade keeps your current values.
+Through Claude, `/gt:gt-init` asks each choice, security first, shows one review screen, then installs; on
+exit 5 it asks and never retries with the defaults. The sandbox mode, paranoid, `--hook-mode` and
+`--accept-defaults` flags are listed in `./install.sh --help`.
+
+## Where the hooks live: two routes (0.21.0)
+
+| Route | When | Registered in |
+|---|---|---|
+| **plugin** | Claude Code **2.1.136 or newer**, the default | each plugin's `hooks/hooks.json` (gt, gt-watch, gt-report-card, gt-usage, gt-pane); `settings.json` is not written |
+| **settings** | older Claude Code, or a version the installer cannot read | `~/.claude/settings.json`, by absolute path into `~/.claude/golden-thread/hooks/` |
+
+Every plugin-route entry runs the command the installer wired for this machine, from the **wired
+directory**, `~/.claude/golden-thread/wired/`. `--hook-mode plugin|settings` (or `GT_HOOK_MODE`) overrides
+the choice. A hook is wired once under either route. **Upgrading from 0.20.5** moves gt's own
+`settings.json` hook entries out after a backup; hooks that are yours stay. Restart Claude Code afterwards.
+`python3 ~/.claude/golden-thread/hooks/gt_components.py` and `gt_doctor.py` report on whichever route is used.
 
 ## gt unlock: security, off by default (0.20.1)
 
@@ -425,7 +467,7 @@ changed or not where the list puts it. **By default it then installs anyway, mar
 `GT_REQUIRE_CHECKSUM=1`) turns a mismatch into a refusal (exit 8, nothing copied); use it on the
 machine receiving a publish. A tree with no `SHA256SUMS` installs as it stands.
 
-**The shared transfer copy is not installed from (0.20.2).** gt-src passes code between machines;
+**The shared transfer copy is not installed from (0.20.2).** The shared transfer copy passes code between machines;
 `install.sh` run inside it (it sees `SOURCE.json` at the root) refuses with exit 9 before anything is
 copied. Copy it into your repository with `copygt.sh` and run `install.sh` there. To install from the
 shared copy on purpose: `GT_INSTALL_FROM_SHARED=1 bash install.sh`.

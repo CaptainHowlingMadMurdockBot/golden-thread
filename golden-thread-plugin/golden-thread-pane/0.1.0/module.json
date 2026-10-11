@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "name": "pane",
+  "plugin": "gt-pane",
+  "version": "0.1.0",
+  "requires_gt": ">=0.21.0,<0.22.0",
+  "summary": "The gt pane: twelve plain-words buttons in a side pane (Claude Code mods, 2.1.287 or later); reorder, rename, add and remove them in plain words",
+  "default": "off",
+  "skills": [
+    "gt-pane"
+  ],
+  "scripts": [
+    "gt_pane.py"
+  ],
+  "templates": [],
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "script": "gt_pane.py",
+      "args": [
+        "--hook"
+      ],
+      "kind": "reporter"
+    }
+  ],
+  "hookdir_scripts": [
+    "gt_pane.py"
+  ],
+  "settings": [
+    {
+      "key": "pane_at_start",
+      "default": "open",
+      "values": [
+        "open",
+        "closed",
+        "off"
+      ],
+      "summary": "Whether the gt button pane opens when a session starts.",
+      "detail": "open    the pane opens by itself at the start of every session  (default)\nclosed  nothing opens; type /gt-pane-buttons when you want the buttons\noff     the pane is never drawn: no pane, no line above the prompt, no buttons\n\nThe pane is a column of twelve buttons beside the conversation. Press one (or its key: 1 to 9, 0, - and =)\nand it sends its words to Claude as if you had typed them. In a window narrower than about 144 columns\nthe pane cannot sit beside the conversation, so the buttons appear in a row above the prompt instead.\nYour buttons are the list in ~/.claude/golden-thread/pane/buttons.json; change them by asking Claude\n(\"move Overdue to the top\"), or press Arrange in the pane. It needs Claude Code 2.1.287 or later; in an\nolder Claude Code, or in VS Code, the pane quietly does not appear and nothing else changes.\nChange it with /gt:gt-settings or in plain words."
+    },
+    {
+      "key": "pane_status",
+      "default": "on",
+      "values": [
+        "on",
+        "off"
+      ],
+      "summary": "Show your plan allowance at the bottom of the gt pane.",
+      "detail": "on   a small line under the buttons: 5-hour 23% · weekly 61% · as of 14:05  (default)\noff  nothing is drawn there, and gt does not even open the file the figures come from\n\nThe figures are the last ones gt's usage module measured, copied from its saved readings\n(~/.claude/golden-thread/usage/latest.json, falling back to readings.jsonl in the same folder). The pane only reads those files; it is read-only here, and\nthe numbers are never estimated. If there is no reading, nothing is shown. If the newest reading is\nolder than one hour it is shown dimmed with its age, for example (3h ago), so you can tell it from a fresh one.\nThe figures refresh when the pane opens or redraws; there is no timer."
+    }
+  ],
+  "requires_modules": [],
+  "replaces_core": [],
+  "lockdown": {
+    "trust-local": {
+      "allow": [
+        "Bash(python3 {hooks}/gt_pane.py list*)"
+      ],
+      "deny": []
+    },
+    "trust-network": {
+      "allow": [
+        "Bash(python3 {hooks}/gt_pane.py move *)",
+        "Bash(python3 {hooks}/gt_pane.py swap *)",
+        "Bash(python3 {hooks}/gt_pane.py add *)",
+        "Bash(python3 {hooks}/gt_pane.py remove *)",
+        "Bash(python3 {hooks}/gt_pane.py rename *)",
+        "Bash(python3 {hooks}/gt_pane.py set-prompt *)",
+        "Bash(python3 {hooks}/gt_pane.py reset*)"
+      ],
+      "deny": []
+    }
+  }
+}

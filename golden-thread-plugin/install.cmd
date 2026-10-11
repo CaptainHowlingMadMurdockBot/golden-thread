@@ -16,6 +16,14 @@ rem Windows-style switches (0.20.1): /uninstall, /check, /yes and /? are passed 
 rem --uninstall, --check, --yes and --help, so `install.cmd /uninstall /check` works as a
 rem Windows user would type it. Every other argument is passed on unchanged.
 rem
+rem Install questions (0.21.0, item #33): `install.cmd --questions --json` prints every install question
+rem and installs nothing; the answers go on the same command line (--lockdown, --sandbox-mode, --paranoid,
+rem --model-profile, --persona, --expiry-guard, --statusline, --ast-grep, --answers FILE, --accept-defaults).
+rem Write each as a flag and a SEPARATE value (--lockdown trust-local): cmd.exe treats "=" as an argument
+rem separator, so --lockdown=trust-local would be split. Not at a terminal, a new install with a security
+rem question unanswered exits 5 before installing anything; the exit code below is install.sh's own, so
+rem exit 5 reaches the caller unchanged. Nothing here rewrites these flags.
+rem
 rem UTF-8 (0.20.1): install.sh prints UTF-8 (arrows, dashes); in a console still on the OEM
 rem code page that was mojibake. The code page is switched to 65001 for the run and put back.
 rem GT_LAUNCHER tells install.sh its hints are read in cmd/PowerShell, not in Git Bash.

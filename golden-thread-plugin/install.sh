@@ -541,9 +541,11 @@ def cmd_resolve(a):
         got = states.get(n)
         # module-states judges each module's NEWEST release. When pick chose an older one
         # for a pinned gt, a "requires gt" refusal is about a release not being installed,
-        # so it is not this module's state -- the precedence above stands.
+        # so it is not this module's state -- the precedence above stands. The same holds for
+        # "invalid" (0.21.0): an older gt's validator does not know keys a newer module adds
+        # (`lockdown`), so it calls the NEWEST module.json invalid -- a release not installed.
         if isinstance(got, dict) and got.get("version") not in (None, m["version"]) \
-                and str(got.get("reason", "")).startswith("requires gt"):
+                and str(got.get("reason", "")).startswith(("requires gt", "invalid")):
             got = None
         if isinstance(got, dict):              # module-states --detail
             if got.get("state") in ("on", "off"):
@@ -914,7 +916,22 @@ REQUIRE_CHECKSUM="${GT_REQUIRE_CHECKSUM:+yes}"; REQUIRE_CHECKSUM="${REQUIRE_CHEC
 LIST_MODULES=no
 MODULE_FLAGS=()          # "with:NAME" / "without:NAME", in the order given
 MODEL_PROFILE=""         # --model-profile average|very-high|inherit (0.19.1)
-LOCKDOWN=""              # --lockdown very-secure|mostly-secure|partly-secure|insecure (0.20.5)
+LOCKDOWN=""              # --lockdown strict|trust-local|trust-network|insecure|paranoid (0.20.5; paranoid 0.21.0)
+PERSONA=""               # --persona a,b  (0.21.0): installed persona names, or none
+PERSONA_SET=no           # yes once --persona was given (an empty/none value is still a choice)
+SANDBOX_MODE=""          # --sandbox-mode off|on (0.21.0, item #33: every install question has a flag)
+PARANOID=""              # --paranoid off|on (0.21.0: not asked; the paranoid level answers it)
+EXPIRY_GUARD=""          # --expiry-guard auto|warn-only|off
+TOKEN_PROFILE=""         # --token-profile minimum|calibrated|maximum (0.21.0, item #43)
+PERSONA_ALIGNED=""       # --persona-aligned on|off (0.21.0, item #45)
+REPLY_LENGTH=""          # --reply-length normal|brief|terse (0.21.0, item #39)
+OPEN_GUIDE=""            # --open-guide yes|no: open the Getting started page at the end (item #36)
+STATUSLINE=""            # --statusline yes|no
+AST_GREP=""              # --ast-grep yes|no
+ANSWERS_FILE=""          # --answers FILE: the JSON that `--questions --json` described, filled in
+ACCEPT_DEFAULTS=no       # --accept-defaults: the explicit opt-out of the exit-5 stop (CI)
+QUESTIONS=no             # --questions: print every install question, install nothing
+JSON_OUT=no              # --json (with --questions)
 UNINSTALL=no             # --uninstall: run gt_uninstall.py instead (0.20.1)
 UNINSTALL_ARGS=()        # what is passed through to it: --check/--dry-run, --yes, ...
 ORIG_ARGS=("$@")         # kept for the re-run after a migration changes a module choice
@@ -938,11 +955,46 @@ while [ $# -gt 0 ]; do
     --model-profile=*) MODEL_PROFILE="${1#--model-profile=}"; shift ;;
     --lockdown)   LOCKDOWN="${2:-}"; shift 2 || true ;;
     --lockdown=*) LOCKDOWN="${1#--lockdown=}"; shift ;;
+    --persona)    PERSONA="${2:-}"; PERSONA_SET=yes; shift 2 || true ;;
+    --persona=*)  PERSONA="${1#--persona=}"; PERSONA_SET=yes; shift ;;
+    --sandbox-mode)   SANDBOX_MODE="${2:-}"; shift 2 || true ;;
+    --sandbox-mode=*) SANDBOX_MODE="${1#--sandbox-mode=}"; shift ;;
+    --paranoid)   PARANOID="${2:-}"; shift 2 || true ;;
+    --paranoid=*) PARANOID="${1#--paranoid=}"; shift ;;
+    --expiry-guard)   EXPIRY_GUARD="${2:-}"; shift 2 || true ;;
+    --expiry-guard=*) EXPIRY_GUARD="${1#--expiry-guard=}"; shift ;;
+    --token-profile)   TOKEN_PROFILE="${2:-}"; shift 2 || true ;;
+    --token-profile=*) TOKEN_PROFILE="${1#--token-profile=}"; shift ;;
+    --persona-aligned)   PERSONA_ALIGNED="${2:-}"; shift 2 || true ;;
+    --persona-aligned=*) PERSONA_ALIGNED="${1#--persona-aligned=}"; shift ;;
+    --reply-length)   REPLY_LENGTH="${2:-}"; shift 2 || true ;;
+    --reply-length=*) REPLY_LENGTH="${1#--reply-length=}"; shift ;;
+    --open-guide)   OPEN_GUIDE="${2:-}"; shift 2 || true ;;
+    --open-guide=*) OPEN_GUIDE="${1#--open-guide=}"; shift ;;
+    --statusline)   STATUSLINE="${2:-}"; shift 2 || true ;;
+    --statusline=*) STATUSLINE="${1#--statusline=}"; shift ;;
+    --ast-grep)   AST_GREP="${2:-}"; shift 2 || true ;;
+    --ast-grep=*) AST_GREP="${1#--ast-grep=}"; shift ;;
+    --answers)    ANSWERS_FILE="${2:-}"; shift 2 || true ;;
+    --answers=*)  ANSWERS_FILE="${1#--answers=}"; shift ;;
+    --accept-defaults) ACCEPT_DEFAULTS=yes; shift ;;
+    --questions)  QUESTIONS=yes; shift ;;
+    --json)       JSON_OUT=yes; UNINSTALL_ARGS+=("$1"); shift ;;
     --require-checksum) REQUIRE_CHECKSUM=yes; shift ;;
     --uninstall) UNINSTALL=yes; shift ;;
-    --check|--dry-run|--yes|-y|--keep-vault-config|--discard-queued|--purge-backups|--purge-lotr|--json)
+    --check|--dry-run|--yes|-y|--keep-vault-config|--discard-queued|--purge-backups|--purge-lotr)
       UNINSTALL_ARGS+=("$1"); shift ;;
+    --hook-mode)   GT_HOOK_MODE="${2:-}"; shift 2 || true ;;
+    --hook-mode=*) GT_HOOK_MODE="${1#--hook-mode=}"; shift ;;
     -h|--help)
+      if [ "${2:-}" = security ]; then
+        # owner 2026-10-10: every security setting, what it does and how to change each. Read
+        # from this tree's settings registry (gt_settings.py security --full), so it cannot drift.
+        _gt_set="$SCRIPT_DIR/golden-thread/$(latest_version "$SCRIPT_DIR/golden-thread")/scripts/gt_settings.py"
+        echo "install.sh --help security"
+        python3 -B "$_gt_set" security --full
+        exit $?
+      fi
       # The module list is READ from this tree (0.20.1: a typed list missed lotr, usage and
       # visualize). Every <dir>/<newest>/module.json's "name".
       _gt_mods=$(for _d in "$SCRIPT_DIR"/*/; do
@@ -976,15 +1028,34 @@ install.sh — install the Golden Thread Claude Code plugins (gt and every plugi
   ./install.sh --list-modules         print each module, its state and why, install nothing
   ./install.sh --model-profile P      the model and effort each skill runs at: average (a new
                                       install's default), very-high, or inherit; remembered
-  ./install.sh --lockdown L           how much Claude may run without asking: very-secure (the
-                                      default), mostly-secure, partly-secure or insecure; asked
+  ./install.sh --lockdown L           how much Claude may run without asking: strict (the
+                                      default), trust-local, trust-network, insecure, or
+                                      paranoid (strict plus locks on gt's own code); asked
                                       at a terminal when not given (gt_lockdown.py table)
+  ./install.sh --paranoid on|off      the paranoid switch on its own, e.g. trust-local plus
+                                      paranoid; not asked (the paranoid level answers it)
+  ./install.sh --questions [--json]   print every install question (security level first), with
+                                      what each choice means; install nothing. The answers are
+                                      flags: --lockdown, --sandbox-mode, --paranoid,
+                                      --token-profile, --model-profile, --persona, --persona-aligned, --reply-length,
+                                      --expiry-guard, --statusline, --ast-grep, --open-guide;
+                                      or --answers FILE (the JSON back)
+  ./install.sh --accept-defaults      NOT at a terminal, a new install stops with exit 5 until the
+                                      security questions are answered; this takes the defaults on
+                                      purpose (CI), and the summary says they were accepted
   ./install.sh --uninstall --check    list everything gt put on this machine; change nothing
   ./install.sh --uninstall            remove it (asks once; --yes when not at a terminal),
                                       then re-check that nothing is left. The vault is never
                                       touched. Also: --keep-vault-config, --discard-queued,
                                       --purge-backups, --purge-lotr (gt_uninstall.py --help)
+  ./install.sh --hook-mode M          plugin: the hooks ship in the plugins' hooks/hooks.json
+                                      and settings.json is not written (the default from
+                                      Claude Code 2.1.136); settings: wire settings.json as
+                                      before (the default below it, or when the version cannot
+                                      be read). Also GT_HOOK_MODE.
   ./install.sh --help                 this text
+  ./install.sh --help security        every security setting: what it does and how to change it
+                                      (long: pipe it to less)
 
 A tree published by dev/sync-gt-src.sh carries SHA256SUMS at the repository root. Before
 anything is installed, every file listed there is checked, and a file missing, changed, or not
@@ -1005,6 +1076,11 @@ With no vault and no --vault:
   * at a terminal, you are asked where the vault should go;
   * otherwise (an agent, a pipe, CI) the install stops with exit 4 and says what it
     needs, rather than inventing a directory and claiming ~/.claude/vault-config.json.
+
+Exit 5 (0.21.0): not at a terminal, a NEW install with a security question unanswered stops
+BEFORE installing anything and names the flags that answer it. An install run by Claude should
+ask the person first (install.sh --questions --json). Over an existing gt, an unanswered
+question keeps the current value. At a terminal every unanswered question is asked.
 
 If the release ships machine migrations, they run after the plugin files and hooks are
 in place; a failed one stops the install with exit 7.
@@ -1029,9 +1105,13 @@ USAGE
 done
 # A bad --lockdown stops here, before anything is installed (0.20.5).
 case "$LOCKDOWN" in
-  ""|very-secure|mostly-secure|partly-secure|insecure) ;;
-  *) echo "✗ --lockdown: '$LOCKDOWN' is not one of very-secure, mostly-secure, partly-secure, insecure"
+  ""|strict|trust-local|trust-network|insecure|paranoid) ;;
+  *) echo "✗ --lockdown: '$LOCKDOWN' is not one of strict, trust-local, trust-network, insecure, paranoid"
      exit 1 ;;
+esac
+case "${GT_HOOK_MODE:-}" in
+  ""|plugin|settings) ;;
+  *) echo "✗ --hook-mode: ${GT_HOOK_MODE} is not plugin or settings"; exit 1 ;;
 esac
 if [ "$LIST_PLUGINS" = yes ]; then
   discover_plugins "$SCRIPT_DIR" | tr '\t' ' '
@@ -1051,7 +1131,7 @@ if [ "$UNINSTALL" = yes ]; then
   python3 "$_gt_un" ${UNINSTALL_ARGS[@]+"${UNINSTALL_ARGS[@]}"} || _gt_rc=$?
   exit "$_gt_rc"
 fi
-if [ "${#UNINSTALL_ARGS[@]}" -gt 0 ]; then
+if [ "${#UNINSTALL_ARGS[@]}" -gt 0 ] && [ "$QUESTIONS" != yes ]; then
   echo "✗ ${UNINSTALL_ARGS[0]} is an --uninstall option; for an install it means nothing."
   echo "  try: $U_INSTALL --uninstall ${UNINSTALL_ARGS[*]}"
   exit 1
@@ -1092,6 +1172,16 @@ with_heartbeat() {  # $1 = what is happening (e.g. "backing up the vault"); rest
   wait "$pid" || rc=$?
   HEARTBEAT_ELAPSED=$((SECONDS - start))
   return "$rc"
+}
+
+# Each interactive question opens with two rows of asterisks, so on screen it is plain where
+# one question ends and the next begins (owner 2026-10-10). gt_install_questions.py does the
+# same for the questions it asks (QUESTION_BREAK).
+question_break() {
+  local row="************************************************************************"
+  echo ""
+  echo "$row"
+  echo "$row"
 }
 
 checksum_problem() {   # $1 = what went wrong; stops only when verification was required
@@ -1230,6 +1320,96 @@ SETTINGS="$HOME/.claude/settings.json"
 INSTALLED="$HOME/.claude/plugins/installed_plugins.json"
 KNOWN="$HOME/.claude/plugins/known_marketplaces.json"
 
+# ── The install questions (0.21.0, item #33) ──────────────────────────────────────────────────
+# --questions prints them and installs nothing. Otherwise every answer is resolved NOW, before
+# any file is written: flags, --answers FILE, the terminal, the current values, the defaults. Not
+# at a terminal, a new install with a security question unanswered stops here with exit 5.
+GT_QUESTIONS="$SRC/scripts/gt_install_questions.py"
+if [ "$QUESTIONS" = yes ]; then
+  if [ ! -f "$GT_QUESTIONS" ]; then
+    echo "✗ this release ($VERSION) has no install questions list."
+    exit 1
+  fi
+  _gt_qa=(list)
+  if [ "$JSON_OUT" = yes ]; then _gt_qa+=(--json); fi
+  _gt_rc=0
+  python3 -B "$GT_QUESTIONS" "${_gt_qa[@]}" || _gt_rc=$?
+  exit "$_gt_rc"
+fi
+PLAN_SUMMARY=""
+PLAN_REVIEW=""
+# --list-modules asks nothing and installs nothing, so it needs no answers
+if [ -f "$GT_QUESTIONS" ] && [ "$LIST_MODULES" != yes ]; then
+  _gt_penv=$(mktemp "${TMPDIR:-/tmp}/gt-plan-env.XXXXXX")
+  _gt_psum=$(mktemp "${TMPDIR:-/tmp}/gt-plan-sum.XXXXXX")
+  _gt_prev=$(mktemp "${TMPDIR:-/tmp}/gt-plan-rev.XXXXXX")
+  _gt_pa=(plan --env-out "$_gt_penv" --summary-out "$_gt_psum" --review-out "$_gt_prev")
+  if [ "$ACCEPT_DEFAULTS" = yes ]; then _gt_pa+=(--accept-defaults); fi
+  if [ -t 0 ] && [ -t 1 ]; then _gt_pa+=(--tty); fi
+  if [ -n "$ANSWERS_FILE" ]; then _gt_pa+=(--answers "$ANSWERS_FILE"); fi
+  if [ -n "$LOCKDOWN" ]; then _gt_pa+=(--set "lockdown=$LOCKDOWN"); fi
+  if [ -n "$SANDBOX_MODE" ]; then _gt_pa+=(--set "sandbox_mode=$SANDBOX_MODE"); fi
+  if [ -n "$PARANOID" ]; then _gt_pa+=(--set "paranoid=$PARANOID"); fi
+  if [ -n "$MODEL_PROFILE" ]; then _gt_pa+=(--set "model_profile=$MODEL_PROFILE"); fi
+  if [ "$PERSONA_SET" = yes ]; then _gt_pa+=(--set "persona=${PERSONA:-none}"); fi
+  if [ -n "$EXPIRY_GUARD" ]; then _gt_pa+=(--set "expiry_guard=$EXPIRY_GUARD"); fi
+  if [ -n "$TOKEN_PROFILE" ]; then _gt_pa+=(--set "token_profile=$TOKEN_PROFILE"); fi
+  if [ -n "$PERSONA_ALIGNED" ]; then _gt_pa+=(--set "persona_aligned=$PERSONA_ALIGNED"); fi
+  if [ -n "$REPLY_LENGTH" ]; then _gt_pa+=(--set "reply_length=$REPLY_LENGTH"); fi
+  if [ -n "$OPEN_GUIDE" ]; then _gt_pa+=(--set "open_guide=$OPEN_GUIDE"); fi
+  if [ -n "$STATUSLINE" ]; then _gt_pa+=(--set "statusline=$STATUSLINE"); fi
+  if [ -n "$AST_GREP" ]; then _gt_pa+=(--set "ast_grep=$AST_GREP"); fi
+  # --with pane / --without pane answer the pane question (item #41)
+  for _f in ${MODULE_FLAGS[@]+"${MODULE_FLAGS[@]}"}; do
+    case "$_f" in
+      with:pane) _gt_pa+=(--set "pane=yes") ;;
+      without:pane) _gt_pa+=(--set "pane=no") ;;
+    esac
+  done
+  _gt_rc=0
+  python3 -B "$GT_QUESTIONS" "${_gt_pa[@]}" || _gt_rc=$?
+  if [ "$_gt_rc" -ne 0 ]; then
+    rm -f "$_gt_penv" "$_gt_psum" "$_gt_prev"
+    exit "$_gt_rc"
+  fi
+  # shellcheck disable=SC1090
+  . "$_gt_penv"
+  PLAN_SUMMARY=$(cat "$_gt_psum")
+  PLAN_REVIEW=$(cat "$_gt_prev")
+  rm -f "$_gt_penv" "$_gt_psum" "$_gt_prev"
+  # what the plan decided is what the steps below apply
+  if [ "${PLAN_persona_SRC:-}" = choice ]; then
+    PERSONA="$PLAN_persona"; PERSONA_SET=yes
+  fi
+  # The pane question decides whether the gt-pane module is installed (item #41). An explicit
+  # --with/--without already is the answer; a kept answer changes nothing; a no that nobody
+  # chose leaves the module at its default (off), recording nothing.
+  case "${PLAN_pane_SRC:-}:${PLAN_pane:-}" in
+    choice:yes|default:yes|accepted:yes)
+      case " ${MODULE_FLAGS[*]:-} " in *" with:pane "*|*" without:pane "*) ;; *) MODULE_FLAGS+=("with:pane") ;; esac ;;
+    choice:no)
+      case " ${MODULE_FLAGS[*]:-} " in *" with:pane "*|*" without:pane "*) ;; *) MODULE_FLAGS+=("without:pane") ;; esac ;;
+  esac
+fi
+plan_words() {  # $1 = a PLAN_<key>_SRC value -> how the answer came about, in words
+  case "$1" in
+    choice)   echo "your choice" ;;
+    kept)     echo "kept: current" ;;
+    accepted) echo "default, accepted with --accept-defaults" ;;
+    *)        echo "default, chosen for you" ;;
+  esac
+}
+# A bad --persona stops here, before anything is installed (0.21.0). The valid names are the
+# packs this release ships, so the list cannot drift from them.
+if [ "$PERSONA_SET" = yes ] && [ "$PERSONA" != none ] && [ -n "$PERSONA" ]; then
+  _pv=$(python3 -B "$SRC/scripts/gt_persona.py" list 2>/dev/null | awk '{print $1}')
+  for _p in $(echo "$PERSONA" | tr ',' ' '); do
+    case " $(echo $_pv) " in
+      *" $_p "*) ;;
+      *) echo "✗ --persona: '$_p' is not an installed persona; valid: $(echo $_pv | tr ' ' ',')"; exit 1 ;;
+    esac
+  done
+fi
 # The gt this machine had BEFORE this install, read now, before anything below rewrites
 # installed_plugins.json or prunes the old cache (0.15.0). A machine migration needs it --
 # an upgrader from a gt that shipped /gt:gt-farm keeps the farm module -- and by the time
@@ -1266,6 +1446,7 @@ gt_on_exit() {  # $1 = the exit status
      && ! { [ "$rc" -eq 9 ] && [ "${FORCE_MANIFEST:-no}" = yes ]; }; then
     echo ""
     if ( snapshot_restore ); then
+      GT_ROLLED_BACK=yes
       echo "ROLLED BACK — the install exited $rc, so the machine is as it was before it started:"
       echo "  settings.json, the plugin registrations, marketplace and cache, ~/.claude/golden-thread"
       echo "  (its backups/ kept) and vault-config.json are restored. The vault is not rolled back."
@@ -1273,6 +1454,20 @@ gt_on_exit() {  # $1 = the exit status
       echo "⚠ ROLLBACK INCOMPLETE — the install exited $rc and restoring the previous state failed."
       echo "  The copy taken before the install is kept at: $GT_SNAP"
       GT_SNAP=""                                # keep it: it is the only copy
+    fi
+  fi
+  # Installed-code integrity (0.21.0): this run unlocked gt's code (GT_ITOKEN), so it leaves it
+  # locked again whatever happened -- after a rollback the files put back are the old ones, unlocked
+  # by the snapshot; after exit 4 the install was complete but the lock step had not been reached.
+  # The token is spent here either way.
+  if [ -n "${GT_ITOKEN:-}" ]; then
+    _gt_it="$HOME/.claude/golden-thread/hooks/gt_integrity.py"
+    if [ -f "$_gt_it" ]; then
+      if [ "${GT_ILOCKED:-}" != yes ] || [ "${GT_ROLLED_BACK:-}" = yes ]; then
+        GT_INTEGRITY_TOKEN="$GT_ITOKEN" python3 -B "$_gt_it" lock >/dev/null 2>&1 \
+          || echo "⚠ gt's code could not be locked again: run  python3 \"$_gt_it\" relock"
+      fi
+      python3 -B "$_gt_it" finish >/dev/null 2>&1 || true
     fi
   fi
   rm -rf "$GT_TMP"
@@ -1404,6 +1599,8 @@ fi
 # silently before any output, and on a cloud-synced gt-src that hashing downloads every file
 # first), and before step 0 below, the first thing that writes anything.
 checksum_block
+# every choice and how it was made, before anything is written (item #33)
+if [ -n "$PLAN_REVIEW" ]; then printf '%s\n' "$PLAN_REVIEW"; fi
 [ -n "$PICK_NOTES" ] && printf '%s' "$PICK_NOTES"
 [ -n "$SKIP_NOTES" ] && printf '%s' "$SKIP_NOTES"
 
@@ -1438,6 +1635,29 @@ downgrade_preflight() {
 # the sandbox/unlock check keys on what the TARGET release lacks, so it runs on every install;
 # IS_DOWNGRADE (set above from GT_PREVIOUS_RELEASE) is for checks that need the direction.
 downgrade_preflight
+
+# ── Installed-code integrity (0.21.0, the `paranoid` settings group) ────────────────────────────
+# When gt's installed code is OS-locked and/or sealed (paranoid.os_lock, paranoid.signed_manifest),
+# this install cannot write it: it must unlock first, and unlocking is the ONE presence-gated step
+# (gate gt-code-write: Touch ID / Windows Hello / authenticator app with gt unlock, else a typed
+# confirmation on a real terminal, whose caveat is printed). It runs HERE -- after every cheap
+# refusal, before the snapshot and the first write -- so a refusal leaves the machine untouched.
+# The presence check yields a token this shell variable holds (never exported, never on disk);
+# `lock` at the end takes it, so one upgrade is one check (two when the manifest is signed).
+# With the group off (the default) `locked` fails at once and none of this runs.
+GT_ITOKEN="" GT_ILOCKED="" GT_ROLLED_BACK=""
+GT_INTEGRITY_TOOL="$HOME/.claude/golden-thread/hooks/gt_integrity.py"
+if [ -f "$GT_INTEGRITY_TOOL" ] && python3 -B "$GT_INTEGRITY_TOOL" locked >/dev/null 2>&1; then
+  echo "gt's installed code is locked or sealed (paranoid): unlocking it for this install needs you."
+  if ! GT_ITOKEN=$(python3 -B "$GT_INTEGRITY_TOOL" unlock --for-upgrade --emit-token) \
+     || [ -z "$GT_ITOKEN" ]; then
+    GT_ITOKEN=""
+    echo "✗ gt's installed code stays locked, so nothing was installed (exit 10)."
+    echo "  Unlock it from a terminal:  python3 \"$GT_INTEGRITY_TOOL\" unlock --for-upgrade"
+    echo "  then run this installer again."
+    exit 10
+  fi
+fi
 
 # ── Rollback: a failed install leaves the machine as it was (0.20.1) ─────────────
 #
@@ -1765,7 +1985,7 @@ while [ "$i" -lt "$PLUGIN_COUNT" ]; do
   # agents/ and workflows/ (0.20.1): the stage agent definitions (gt:<stage>) and the pipeline
   # workflow Claude Code loads from a plugin; replaced like every other dir, so a rollback to a
   # release without them leaves none behind.
-  for dir in .claude-plugin skills scripts templates commands hooks demo packs agents workflows; do
+  for dir in .claude-plugin skills scripts templates commands hooks demo packs agents workflows help; do
     rm -rf "${p_cache:?}/$dir"
     [ -d "$p_src/$dir" ] && cp -r "$p_src/$dir" "$p_cache/"
   done
@@ -1868,6 +2088,14 @@ if [ -d "$SRC/hooks" ]; then
   done < <(modpy onfiles "$MODJSON")
   set_modes ${GT_HOOK_FILES[@]+"${GT_HOOK_FILES[@]}"}
   echo "Installed Core-rule hooks → $GT_HOOKS"
+  # packs/ and MANIFEST.json beside the hooks dir (0.21.0). gt_registry.py takes the release to
+  # be the parent of its own directory, and for the hook copy that parent is
+  # ~/.claude/golden-thread/ -- which had no packs/, so the pre-commit secrets scan resolved
+  # zero patterns and refused to run. MANIFEST.json travels with them: it is the integrity
+  # anchor gt_registry checks every shipped pack against (it fails closed without it).
+  rm -rf "${HOME:?}/.claude/golden-thread/packs"
+  [ -d "$SRC/packs" ] && cp -r "$SRC/packs" "$HOME/.claude/golden-thread/packs"
+  [ -f "$SRC/MANIFEST.json" ] && cp "$SRC/MANIFEST.json" "$HOME/.claude/golden-thread/MANIFEST.json"
   # gt unlock's Touch ID helper (0.20.1, macOS). Built HERE from the shipped Swift source
   # (scripts/gt-presence.swift) with the Xcode Command Line Tools and ad-hoc signed, unless an
   # identical build is already in place. A Developer ID signed release binary installed with a
@@ -2144,7 +2372,7 @@ i=0
 while [ "$i" -lt "$PLUGIN_COUNT" ]; do
   p_src=$(plugin_src "$i"); p_market="$MARKETPLACE/plugins/${PLUGIN_NAMES[$i]}"
   cp "$p_src/.claude-plugin/plugin.json" "$p_market/.claude-plugin/plugin.json"
-  for dir in skills scripts templates commands hooks demo packs agents workflows; do
+  for dir in skills scripts templates commands hooks demo packs agents workflows help; do
     rm -rf "$p_market/$dir"
     [ -d "$p_src/$dir" ] && cp -r "$p_src/$dir" "$p_market/$dir"
   done
@@ -2303,12 +2531,15 @@ if [ -f "$MP" ]; then
   _mp_vault=()
   if [ -n "${VAULT_ARG:-}" ]; then _mp_vault=(--vault "$VAULT_ARG"); fi
   _prof="$MODEL_PROFILE"
+  # the install questions (item #33) decided: an answer given or asked is used as it is; a
+  # kept/defaulted one falls through to the recorded choice and the rules below
+  if [ "${PLAN_model_profile_SRC:-}" = choice ] || [ "${PLAN_model_profile_SRC:-}" = accepted ]; then _prof="$PLAN_model_profile"; fi
   if [ -z "$_prof" ]; then _prof=$(python3 -B "$MP" current --home "$HOME" 2>/dev/null || true); fi
   if [ -z "$_prof" ]; then
     if [ -z "${GT_PREVIOUS_RELEASE:-}" ]; then
       _prof=average
     elif [ -t 0 ] && [ -t 1 ]; then
-      echo ""
+      question_break
       echo "gt can now run each skill at a model and effort that fits it:"
       for _p in average very-high inherit; do python3 -B "$MP" table --profile "$_p" ${_mp_vault[@]+"${_mp_vault[@]}"} | sed 's/^/  /'; done
       printf 'Model profile [A = average / v = very-high / i = inherit (as before)]: '
@@ -2330,33 +2561,104 @@ fi
 
 # 5c. Lockdown level (0.20.5): how much Claude may run without asking. The level is, in order:
 # --lockdown this run, else a question at a terminal (Return keeps the current level, which is
-# very-secure on a new install), else -- no terminal -- the current level, unchanged and named.
+# strict on a new install), else -- no terminal -- the current level, unchanged and named.
 # gt_lockdown.py writes only gt's own allow/deny rules into ~/.claude/settings.json, records
-# them, and backs the file up first; very-secure on a machine gt never loosened writes nothing.
+# them, and backs the file up first; strict on a machine gt never loosened writes nothing.
 LD="$SRC/scripts/gt_lockdown.py"
 if [ -f "$LD" ]; then
   _ld="$LOCKDOWN"
-  _ld_cur=$(python3 -B "$LD" current 2>/dev/null || echo very-secure)
-  if [ -z "$_ld" ] && [ -t 0 ] && [ -t 1 ]; then
-    echo ""
+  _ld_cur=$(python3 -B "$LD" current 2>/dev/null || echo strict)
+  # asked or given through the install questions (item #33); a kept level is left alone
+  if [ "${PLAN_lockdown_SRC:-}" = choice ] || [ "${PLAN_lockdown_SRC:-}" = accepted ] || [ "${PLAN_lockdown_SRC:-}" = default ]; then _ld="$PLAN_lockdown"; fi
+  if [ -z "$_ld" ] && [ -z "${PLAN_lockdown_SRC:-}" ] && [ -t 0 ] && [ -t 1 ]; then
+    question_break
     echo "How much may Claude run without asking? (the lockdown level; these levels reduce prompts,"
     echo "they are not a security boundary -- change it any time: gt_settings.py set lockdown <level>)"
     python3 -B "$LD" table | sed 's/^/  /'
-    printf 'Lockdown level [1 very secure / 2 mostly secure / 3 partly secure / 4 insecure] (Return keeps %s): ' "$(echo "$_ld_cur" | tr '-' ' ')"
+    printf 'Lockdown level [1 strict / 2 trust local / 3 trust network / 4 insecure] (Return keeps %s): ' "$(echo "$_ld_cur" | tr '-' ' ')"
     read -r _ans </dev/tty || _ans=""
     case "$_ans" in
-      1|very*)    _ld=very-secure ;;
-      2|mostly*)  _ld=mostly-secure ;;
-      3|partly*)  _ld=partly-secure ;;
+      1|very*)    _ld=strict ;;
+      2|mostly*)  _ld=trust-local ;;
+      3|partly*)  _ld=trust-network ;;
       4|insecure) _ld=insecure ;;
       *)          _ld="$_ld_cur" ;;
     esac
   fi
+  # paranoid (0.21.0) is strict plus the paranoid switch: the level part is applied here, the
+  # switch with the other settings below (PLAN_paranoid), where a refusal is said out loud
+  if [ "$_ld" = paranoid ]; then _ld=strict; fi
   if [ -n "$_ld" ]; then
     python3 -B "$LD" apply "$_ld" || { echo "✗ lockdown: could not apply $_ld (settings.json left as it was)"; exit 1; }
+  else
+    # a kept level is re-merged all the same: a module rule names its script by the installed
+    # path ({scripts}), which holds the release, so last release's rules would name a folder
+    # this install just replaced
+    # (an older release's gt_lockdown.py may not know `refresh`: say so, never fail the install)
+    python3 -B "$LD" refresh >/dev/null 2>&1 || echo "! lockdown: rules not re-merged for $_ld_cur -- run gt_settings.py set lockdown $_ld_cur"
   fi
   echo "Lockdown: $(python3 -B "$LD" current 2>/dev/null | tr '-' ' ')  (choose with --lockdown <level>, or gt_settings.py set lockdown <level>)"
+  if [ -n "${PLAN_lockdown_SRC:-}" ]; then echo "  lockdown: ${PLAN_lockdown} ($(plan_words "$PLAN_lockdown_SRC"))"; fi
 fi
+
+# 5c-persona (0.21.0). Who is using gt: the persona shapes a new project's extra files, never
+# enforcement. Asked beside the lockdown level: --persona a,b this run (none clears), else a
+# question at a terminal (Return keeps the current choice), else -- no terminal -- unchanged.
+# The choice is recorded after the vault step below, because the setting lives in vault-config.json.
+PS="$SRC/scripts/gt_persona.py"
+if [ -f "$PS" ]; then
+  _pr_cur=$(python3 -B "$SRC/scripts/gt_settings.py" get persona 2>/dev/null || true)
+  if [ "$PERSONA_SET" = no ] && [ -z "${PLAN_persona_SRC:-}" ] && [ -t 0 ] && [ -t 1 ]; then
+    question_break
+    echo "Who is using Golden Thread? A persona adds files to a new project (it never changes what gt enforces)."
+    python3 -B "$PS" list | sed 's/^/  /'
+    printf 'Persona, comma-separated, or none (Return keeps %s): ' "${_pr_cur:-none}"
+    read -r _ans </dev/tty || _ans=""
+    if [ -n "$_ans" ]; then PERSONA="$_ans"; PERSONA_SET=yes; fi
+  fi
+  [ "$PERSONA" = none ] && PERSONA=""
+  echo "Persona: ${PERSONA:-${_pr_cur:-none}}  (choose with --persona a,b, or gt_settings.py set persona a,b)"
+  if [ -n "${PLAN_persona_SRC:-}" ]; then echo "  persona: ${PLAN_persona} ($(plan_words "$PLAN_persona_SRC"))"; fi
+fi
+
+# 5c. The status line (0.21.0). gt-usage's allowance meter shows in Claude Code's status line
+# only with a `statusLine` entry in settings.json -- the user's own display, so no installer
+# wrote it, and people never found the one line in the skill that says how. Offered here, at a
+# terminal only, defaulting to no; never when a status line already exists (it is theirs), and
+# never in an unattended run (one line says how instead).
+offer_statusline() {
+  local u="$HOME/.claude/golden-thread/hooks/gt_usage.py" on
+  [ -f "$u" ] || return 0
+  on=$(python3 -c 'import json,sys
+try: print(any(m.get("name") == "usage" and m.get("state") == "on" for m in json.load(open(sys.argv[1]))))
+except Exception: print(False)' "$MODJSON" 2>/dev/null || echo False)
+  [ "$on" = True ] || return 0
+  if python3 -c 'import json,os,sys
+p = os.path.expanduser("~/.claude/settings.json")
+try: d = json.load(open(p))
+except Exception: d = {}
+sys.exit(0 if isinstance(d, dict) and d.get("statusLine") else 1)' 2>/dev/null; then
+    return 0
+  fi
+  if [ -n "${PLAN_statusline_SRC:-}" ] && [ "${PLAN_statusline_SRC}" = choice ]; then
+    case "$PLAN_statusline" in
+      yes) python3 "$u" --setup-statusline || echo "  ⚠ the status line could not be added"
+           echo "  statusline: yes ($(plan_words "$PLAN_statusline_SRC"))" ;;
+      *)   echo "  Status line not set. Later: python3 \"$u\" --setup-statusline"
+           echo "  statusline: no ($(plan_words "$PLAN_statusline_SRC"))" ;;
+    esac
+  elif [ -z "${PLAN_statusline_SRC:-}" ] && [ -t 0 ] && [ -t 1 ]; then
+    question_break
+    printf 'Show the plan-allowance meter in Claude Code'"'"'s status line? [y/N]: '
+    local ans=""; read -r ans </dev/tty || ans=""
+    case "$ans" in
+      y|Y|yes|YES) python3 "$u" --setup-statusline || echo "  ⚠ the status line could not be added" ;;
+      *) echo "  Status line not set. Later: python3 \"$u\" --setup-statusline" ;;
+    esac
+  else
+    echo "Status line: not set (no terminal to ask). To show the allowance meter: python3 \"$u\" --setup-statusline"
+  fi
+}
 
 # 6. Register the SessionStart / PreCompact / SessionEnd hooks.
 #
@@ -2367,11 +2669,29 @@ fi
 #                  mechanisms existing on one machine only.
 # PreCompact / SessionEnd -> gt_report_card.py: since 0.15.0 declared by the report-card
 #                  module's module.json and wired here exactly like gt's own entries.
+#
+# TWO ROUTES since 0.21.0 (gt_components.py "plugin-shipped hooks" has the why):
+#   plugin    the gt plugin and each module plugin ship hooks/hooks.json, whose entries source
+#             a per-machine command from ~/.claude/golden-thread/wired/. This step writes
+#             those files and REMOVES gt's own entries from settings.json (a user's hooks are
+#             kept); settings.json is written only when there is something of gt's to remove.
+#   settings  settings.json is wired exactly as 0.20.0 did, and the wired dir is removed so
+#             the plugins' entries stay no-ops (nothing runs twice).
+# The route: --hook-mode / GT_HOOK_MODE, else plugin from Claude Code 2.1.136, else settings.
+# Exported so vault_init (step 7) wires the enforcement hooks on the same route.
+GT_HOOK_MODE=$(GT_HOOK_MODE="${GT_HOOK_MODE:-}" python3 -B "$SRC/scripts/gt_components.py" \
+                 hook-mode --choose 2>/dev/null || true)
+case "$GT_HOOK_MODE" in plugin|settings) ;; *) GT_HOOK_MODE=settings ;; esac
+export GT_HOOK_MODE
+echo "Hook route: $GT_HOOK_MODE  ($(python3 -B "$SRC/scripts/gt_components.py" hook-mode 2>/dev/null | sed 's/^route to wire: //' || true))"
 python3 - "$SRC" "$SCRIPT_DIR" "$MODJSON" <<'EOF'
 import json, os, subprocess, sys, tempfile
 src, script_dir, modjson = sys.argv[1:4]
+route = os.environ.get('GT_HOOK_MODE') or 'settings'
 p = os.path.expanduser('~/.claude/settings.json')
 d = json.load(open(p)) if os.path.exists(p) else {}
+before = json.dumps(d, sort_keys=True)
+had_hooks = 'hooks' in d
 hooks = d.setdefault('hooks', {})
 
 # The list of what to register is NOT written here. It lives in
@@ -2403,7 +2723,7 @@ want = [(r['event'], r['script'], r['command'], r.get('matcher'), r.get('timeout
         for r in regs if r.get('owner') == 'install.sh']
 
 changed = []
-for event, script, cmd, matcher, timeout in want:
+for event, script, cmd, matcher, timeout in (want if route == 'settings' else []):
     arr = hooks.setdefault(event, [])
     # Replace the entry for THIS script only, not every golden-thread entry for the
     # event -- SessionStart has four, and wiping by event would delete the
@@ -2439,7 +2759,10 @@ for event, script, cmd, matcher, timeout in want:
 import shlex, time
 HOOKS_DIR = os.path.realpath(os.path.expanduser('~/.claude/golden-thread/hooks'))
 known = {r['script'] for r in regs}
-pairs = {(r['event'], r['script']) for r in regs}
+# On the plugin route no (event, script) of gt's belongs in settings.json: every entry that
+# runs a known gt hooks-dir script is removed below, the enforcement ones included (step 7
+# wires those as files). Unknown hooks-dir entries and the user's own hooks stay.
+pairs = {(r['event'], r['script']) for r in regs} if route == 'settings' else set()
 try:
     with open(os.path.join(src, 'retired.json'), encoding='utf-8') as fh:
         retired = {x for x in json.load(fh).get('hook_registrations', [])
@@ -2520,12 +2843,36 @@ if (removed or mod_removed) and os.path.exists(p):
     with open(p, 'rb') as s_in, open(bak, 'wb') as s_out:
         s_out.write(s_in.read())
 
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix='.gt-')
-with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as fh:
-    fh.write(json.dumps(d, indent=2) + '\n')
-    fh.flush()
-    os.fsync(fh.fileno())
-os.replace(tmp, p)
+if route == 'plugin' and not had_hooks and not hooks:
+    del d['hooks']             # never ADD an empty "hooks" key on the plugin route
+# The plugin route writes settings.json only to take gt's entries OUT of it. The settings
+# route writes it every time, as every release before 0.21.0 did.
+if route == 'settings' or json.dumps(d, sort_keys=True) != before:
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix='.gt-')
+    with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as fh:
+        fh.write(json.dumps(d, indent=2) + '\n')
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, p)
+
+# The wired files (plugin route): install.sh's own entries now; the enforcement entries are
+# vault_init's (step 7), written only against a vault. A wired file no registration names any
+# more (a retired hook, a module switched off) is removed. The settings route removes the
+# whole dir, so a plugin's hooks.json entries do nothing there.
+if route == 'plugin':
+    _all = [dict(r) for r in regs]
+    _gc.write_wired([r for r in _all if r.get('owner') == 'install.sh'])
+    for g in _gc.prune_wired({_gc.wired_name(r['event'], r['script']) for r in _all}):
+        print('Removed wired hook %s (no longer registered)' % g)
+else:
+    # Inline, not _gc: a rollback installs a gt whose gt_components predates the plugin
+    # route, and its wired files would only sit there inert (its plugin ships no hooks.json).
+    import shutil
+    _wd = os.path.expanduser('~/.claude/golden-thread/wired')
+    if os.path.isdir(_wd):
+        shutil.rmtree(_wd, ignore_errors=True)
+        print('Hook route is settings: removed ~/.claude/golden-thread/wired/')
 
 # Say what was wired, by event and by count. The old message printed a bare list
 # after the "Restart Claude Code" line, where it read as trailing noise past the
@@ -2535,15 +2882,27 @@ by_event = {}
 for c in changed:
     ev, sc = c.split('/', 1)
     by_event.setdefault(ev, []).append(sc)
-# Both numbers (0.20.1): "Registered 18" here and "all 24 declared hooks are wired" from the
-# gate read as six going missing. The rest are the enforcement hooks, wired against the vault.
-others = len([r for r in regs if r.get('owner') != 'install.sh'])
-print('Registered %d hooks in ~/.claude/settings.json%s:'
-      % (len(changed), ' (%d more, the Core-rule enforcement hooks, are wired against the '
-         'vault: %d in all)' % (others, len(changed) + others) if others else ''))
+if route == 'settings':
+    # Both numbers (0.20.1): "Registered 18" here and "all 24 declared hooks are wired" from the
+    # gate read as six going missing. The rest are the enforcement hooks, wired against the vault.
+    others = len([r for r in regs if r.get('owner') != 'install.sh'])
+    print('Registered %d hooks in ~/.claude/settings.json%s:'
+          % (len(changed), ' (%d more, the Core-rule enforcement hooks, are wired against the '
+             'vault: %d in all)' % (others, len(changed) + others) if others else ''))
+
+else:
+    for r in regs:
+        if r.get('owner') == 'install.sh':
+            by_event.setdefault(r['event'], []).append(r['script'])
+    print('Wired %d hooks for the plugins\' hooks.json (~/.claude/golden-thread/wired/; '
+          'settings.json not used):' % sum(len(v) for v in by_event.values()))
 for ev in sorted(by_event):
     print('  %-16s %s' % (ev, ', '.join(sorted(by_event[ev]))))
-if removed:
+if removed and route == 'plugin':
+    print('Moved %d gt hook entr%s out of ~/.claude/settings.json -- the plugins\' hooks.json '
+          'runs them now; your own hooks are untouched (backup: %s):'
+          % (len(removed), 'y' if len(removed) == 1 else 'ies', bak))
+elif removed:
     print('Removed %d hook entr%s this release no longer ships (backup: %s):'
           % (len(removed), 'y' if len(removed) == 1 else 'ies', bak))
     for r in sorted(removed):
@@ -2580,6 +2939,8 @@ if [ -f "$SRC/scripts/gt_components.py" ]; then
     python3 "$SRC/scripts/gt_components.py" wiring "$SRC" --owner install.sh --home "$HOME" 2>&1 | sed 's/^/    /' || true
   fi
 fi
+
+offer_statusline || true
 
 # 6b. Machine migrations (0.14.0, Requirement R1: upgrades converge).
 #
@@ -2736,6 +3097,14 @@ for r in rows:
 ' 2>/dev/null || true
 }
 
+hook_dest() {  # where step 7 wires the enforcement hooks, by route (0.21.0)
+  if [ "${GT_HOOK_MODE:-settings}" = plugin ]; then
+    echo "~/.claude/golden-thread/wired/ (run by the gt plugin's hooks.json)"
+  else
+    echo "~/.claude/settings.json"
+  fi
+}
+
 setup_vault() {  # $1 = path to create or connect
   local target="$1" mode out
   snapshot_vault_state "$target"
@@ -2762,7 +3131,7 @@ setup_vault() {  # $1 = path to create or connect
       >/dev/null 2>&1 || { echo "⚠ could not connect $target"; return 1; }
   fi
   if out=$(python3 "$SRC/scripts/vault_init.py" install-core-rules --vault "$target" 2>/dev/null); then
-    echo "Wired enforcement hooks → ~/.claude/settings.json"
+    echo "Wired enforcement hooks → $(hook_dest)"
     # A vault created just now has every rule by definition; only a connected one can
     # have had something put back.
     [ "$mode" = fresh ] || printf '%s' "$out" | report_core_rules
@@ -2801,7 +3170,7 @@ wire_enforcement_hooks() {  # $1 = vault path
   if [ "${rc:-1}" -eq 0 ]; then
     printf '%s' "$out" | report_core_rules
     if grep -q '"action": "updated"' <<<"$out"; then
-      echo "Wired enforcement hooks → ~/.claude/settings.json"
+      echo "Wired enforcement hooks → $(hook_dest)"
     else
       echo "Enforcement hooks already wired"
     fi
@@ -2882,7 +3251,7 @@ if [ -z "$VAULT_PATH" ] || [ ! -d "$VAULT_PATH" ]; then
     echo "when you have one."
   elif [ -t 0 ] && [ -t 1 ]; then
     # A person is watching. Ask; never invent a directory unasked.
-    echo ""
+    question_break
     echo "No Golden Thread vault is configured on this machine."
     echo "A vault is a plain folder of markdown — it is where your memory lives, and"
     echo "the Core-rule enforcement hooks are wired against it."
@@ -3062,6 +3431,53 @@ fi
 # It writes `parallel_profile` only. `parallel_work` and `parallel_max` are the user's
 # preferences and are never touched: re-running this installer must not undo a ceiling
 # somebody set on purpose.
+if [ "$PERSONA_SET" = yes ]; then
+  if [ -f "$HOME/.claude/vault-config.json" ]; then
+    python3 "$SRC/scripts/gt_settings.py" set persona "${PERSONA:-none}" | sed 's/^/  /' || true
+  else
+    echo "  (persona not recorded: there is no vault yet; after /gt:gt-init run: gt_settings.py set persona ${PERSONA:-none})"
+  fi
+fi
+# The install questions that are settings (item #33): sandbox_mode, paranoid and expiry_guard,
+# applied when the person chose them (or accepted defaults on a new machine). A kept answer is
+# left alone. A refused one is said out loud and never hidden: the install does not fail on it,
+# because gt is installed and working, but the summary names it.
+PLAN_NOT_APPLIED=""
+apply_plan_setting() {  # $1 = key
+  local key="$1" val src cur
+  eval "val=\${PLAN_${key}:-}; src=\${PLAN_${key}_SRC:-}"
+  [ -n "$src" ] || return 0
+  [ "$src" != kept ] || return 0
+  cur=$(python3 -B "$SRC/scripts/gt_settings.py" get "$key" 2>/dev/null || true)
+  if [ "$cur" = "$val" ]; then
+    echo "  $key: $val ($(plan_words "$src"))"
+    return 0
+  fi
+  if [ ! -f "$HOME/.claude/vault-config.json" ]; then
+    echo "  ⚠ $key: $val ($(plan_words "$src")) NOT APPLIED: there is no vault yet; after /gt:gt-init run: gt_settings.py set $key $val"
+    PLAN_NOT_APPLIED="${PLAN_NOT_APPLIED}  $key=$val (no vault yet)
+"
+    return 0
+  fi
+  local rc=0 out
+  out=$(python3 -B "$SRC/scripts/gt_settings.py" set "$key" "$val" 2>&1) || rc=$?
+  if [ -n "$out" ]; then printf '%s\n' "$out" | sed 's/^/    /'; fi
+  if [ "$rc" -eq 0 ]; then
+    echo "  $key: $val ($(plan_words "$src"))"
+  else
+    echo "  ⚠ $key: $val NOT APPLIED (the reason is above); set it yourself later: gt_settings.py set $key $val"
+    PLAN_NOT_APPLIED="${PLAN_NOT_APPLIED}  $key=$val (refused)
+"
+  fi
+}
+apply_plan_setting sandbox_mode
+apply_plan_setting paranoid
+# the token profile first (it sets seven settings), then the two it shares an answer with: an answer
+# the person gave for the expiry guard or the reply length is applied after it and so wins
+apply_plan_setting token_profile
+apply_plan_setting expiry_guard
+apply_plan_setting reply_length
+apply_plan_setting persona_aligned
 if [ -f "$HOME/.claude/vault-config.json" ]; then
   # Said in words (0.20.1): the raw line named the internal key (parallel_profile, cpu_max).
   python3 "$SRC/scripts/gt_settings.py" detect-machine --write 2>/dev/null \
@@ -3322,7 +3738,7 @@ else
   AG_BREW=""; AG_NPM=""
   if command -v brew >/dev/null 2>&1; then AG_BREW="brew install ast-grep"; fi
   if command -v npm  >/dev/null 2>&1; then AG_NPM="npm install -g @ast-grep/cli"; fi
-  echo ""
+  if [ -z "${PLAN_ast_grep_SRC:-}" ] && [ -t 0 ] && [ -t 1 ] && [ -n "$AG_BREW$AG_NPM" ]; then question_break; else echo ""; fi
   echo "ast-grep is not installed. It is OPTIONAL: gt works without it, and any rule that"
   echo "needs it is reported as SKIPPED rather than quietly passing. With it, gt can check"
   echo "code structurally in 29 languages (bash, markdown, go, rust and more) instead of by"
@@ -3330,7 +3746,24 @@ else
   if [ -z "$AG_BREW" ] && [ -z "$AG_NPM" ]; then
     echo "Neither brew nor npm is on PATH here, so gt cannot offer to install it."
     echo "See https://ast-grep.github.io/ for other routes."
-  elif [ -t 0 ] && [ -t 1 ]; then
+  elif [ "${PLAN_ast_grep_SRC:-}" = choice ] && [ "$PLAN_ast_grep" = no ]; then
+    echo "ast-grep: not installed (no) (your choice). Structural rules will be reported as SKIPPED until it is:"
+    echo "  ${AG_BREW:-$AG_NPM}"
+  elif [ "${PLAN_ast_grep_SRC:-}" = choice ]; then
+    AG_CMD="${AG_BREW:-$AG_NPM}"
+    echo "ast-grep: yes (your choice)"
+    echo "Running: $AG_CMD"
+    AG_RC=0
+    $AG_CMD || AG_RC=$?
+    AG_AFTER=0
+    astgrep_state || AG_AFTER=$?
+    if [ "$AG_RC" -eq 0 ] && [ "$AG_AFTER" -eq 0 ]; then
+      echo "ast-grep $AG_FOUND_VER installed — structural rules are now available."
+    else
+      echo "That did not complete. gt is installed and fine; structural rules will be"
+      echo "SKIPPED until ast-grep is present. Try it yourself later: $AG_CMD"
+    fi
+  elif [ -z "${PLAN_ast_grep_SRC:-}" ] && [ -t 0 ] && [ -t 1 ]; then
     echo ""
     if [ -n "$AG_BREW" ]; then echo "  1) $AG_BREW"; fi
     if [ -n "$AG_NPM" ];  then echo "  2) $AG_NPM"; fi
@@ -3427,6 +3860,25 @@ post_install_gate() {
   echo "    $U_PY \"$(upath "$doc")\" post-install --vault \"$(upath "$vault")\""
   return 0
 }
+# Installed-code integrity (0.21.0): compile, seal and lock what was just installed, with the token
+# the presence check at the top gave -- or, on a first install, with no check at all (nothing is
+# protected yet that a first seal could bypass). `lock` refuses code that differs from the release
+# manifest installed beside it. With the group off it converges to "nothing locked" and says nothing
+# unless it had something to undo. It runs BEFORE the post-install gate so the gate's integrity row
+# validates the locked machine; if the gate fails the install is rolled back and re-locked above.
+if [ -f "$HOME/.claude/golden-thread/hooks/gt_integrity.py" ]; then
+  if GT_INTEGRITY_TOKEN="$GT_ITOKEN" python3 -B "$HOME/.claude/golden-thread/hooks/gt_integrity.py" lock --from-install; then
+    GT_ILOCKED=yes
+  else
+    echo "✗ gt's installed code could not be sealed and locked (above); the install is rolled back."
+    exit 11
+  fi
+elif [ -f "$HOME/.claude/golden-thread/integrity.json" ]; then
+  # an OLDER gt (a rollback) has no integrity tools: nothing there reads the record, so drop it
+  rm -f "$HOME/.claude/golden-thread/integrity.json" "$HOME/.claude/golden-thread/integrity-stamps.json"
+  echo "Removed the installed-code integrity record (this release has no integrity tools)."
+fi
+
 # gt unlock's authority (0.20.1, M12): a running gt_unlockd.py keeps the code it started with,
 # so the same pid used to survive a reinstall, an upgrade and a rollback. Stop it when the code
 # it runs has changed -- an orderly stop that needs no factor, ONLY because the code changed,
@@ -3449,6 +3901,34 @@ if [ -f "$HOME/.claude/golden-thread/hooks/gt_unlock.py" ]; then
   echo ""
   python3 -B "$HOME/.claude/golden-thread/hooks/gt_unlock.py" status 2>/dev/null \
     | sed 's/^/  /' || true
+fi
+
+# What the person chose and what was chosen for them (item #33), once, at the end.
+if [ -n "${PLAN_SUMMARY:-}" ]; then
+  echo ""
+  printf '%s\n' "$PLAN_SUMMARY"
+fi
+if [ -n "${PLAN_NOT_APPLIED:-}" ]; then
+  echo ""
+  echo "Chosen but NOT applied (the install itself is complete):"
+  printf '%s' "$PLAN_NOT_APPLIED"
+fi
+
+# "Open the guide?" (item #36): a yes opens the Getting started page of the offline help for the chosen
+# persona (the first, when there are several); anything else says how to open it later.
+if [ "${PLAN_open_guide:-}" = yes ]; then
+  _gp="${PLAN_persona:-}"
+  case "$_gp" in none) _gp="" ;; esac
+  _gp="${_gp%%,*}"
+  echo ""
+  if [ -n "$_gp" ]; then
+    python3 -B "$SRC/scripts/gt_help.py" start --persona "$_gp" || echo "  (the guide could not be opened: run /gt:gt-help start)"
+  else
+    python3 -B "$SRC/scripts/gt_help.py" start || echo "  (the guide could not be opened: run /gt:gt-help start)"
+  fi
+else
+  echo ""
+  echo "Getting started: say \"show me around Golden Thread\" to Claude, or run /gt:gt-help start"
 fi
 
 echo "Restart Claude Code to load the plugins."

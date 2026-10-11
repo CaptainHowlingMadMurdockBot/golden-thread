@@ -7,6 +7,15 @@ A Claude Code plugin that turns an Obsidian vault into the single source of trut
 
 
 > [!IMPORTANT]
+> **0.21.0: the install asks every choice; hooks ship with the plugins; a `paranoid` group, single-use
+> action tokens and I/O brokers; a token profile; the gt pane; `/gt:gt-help`.**
+> `install.sh --questions` lists every install question, security first (`--token-profile`,
+> `--reply-length`, `--persona-aligned`, `--sandbox-mode`, `--paranoid`, `--with pane`, `--open-guide`,
+> `--answers FILE`); off a terminal a new install with a security question unanswered exits 5.
+> Hooks come from each plugin's `hooks/hooks.json` on Claude Code 2.1.136 or newer. **Breaking:**
+> `/gt:gt-close` now closes the session; completing a project, task or handoff is `/gt:gt-complete`.
+> See the [CHANGELOG](../CHANGELOG.md), [INSTALL.md](INSTALL.md) and [SECURITY.md](SECURITY.md) section 10.
+>
 > **0.20.4: a fingerprint before every push (Touch ID or Windows Hello) and on every commit (macOS only;
 > Windows Hello signing is planned for 0.20.5), all off by default.**
 > `push_fingerprint`, `push_fingerprint_seal_token` and `commit_fingerprint`, for the repos in
@@ -50,7 +59,7 @@ A Claude Code plugin that turns an Obsidian vault into the single source of trut
 > pinned, and sign-in refuses to run from inside Claude Code. Verified live against Linear; Google and Microsoft
 > are tested against fake servers only. `lotr add-mcp` still reuses an existing client's token by reference
 > (gt-lotr 0.2.0). **Recall:** `gt_bench.py recall` measures
-> how often lookup finds the right page; optional prompt hints (`vault_hints`, off by default).
+> how often lookup finds the right page; prompt hints (`vault_hints`, on by default since 0.21.0).
 > **Supersession and expiry** applied when notes are read (`gt_supersede.py`). **Fixes:** the
 > queue guard reads shell tokens and follows `cd`; nothing writes bytecode into the published copy; post-install
 > resolves the installed release from any path and every completed run writes its receipt; one
@@ -60,7 +69,7 @@ A Claude Code plugin that turns an Obsidian vault into the single source of trut
 >
 > **0.18.1 had thirteen themes**; what changed and why is in the CHANGELOG, how to use each in the
 > MANUAL. **One verb per action:** `gt-create`, `gt-open`, `gt-list`, `gt-handle` and the new
-> `gt-close` take the artifact (project, task, handoff) as their argument; the six old task and
+> `gt-complete` take the artifact (project, task, handoff) as their argument; the six old task and
 > handoff skills still work through 0.18.x as deprecated aliases. **A coding loop:** `gt-plan`
 > writes a phased plan and waits for approval; `gt-implement` runs it test-first and stops on red.
 > **Decisions you can trace:** ADR expiry and supersession fields, `gt_adr.py lineage`, and
@@ -125,7 +134,7 @@ Facts move up the hierarchy as they prove themselves general. They never move ba
 
 ---
 
-## Thirty-Six Skills (plus modules)
+## Forty-One Skills (plus modules)
 
 ### Setup
 
@@ -169,7 +178,12 @@ nothing is deleted.
 | `/gt:gt-open task <id>` · `/gt:gt-open handoff [id]` | Read-only: one task's full detail, or one handoff plus only the task lines citing it. |
 | `/gt:gt-list` | Read-only: `tasks [filter]` (`<slug>`, `p1`/`p2`/`p3`, `mine`, `overdue`, `stale`, `deferred`, `ref:<text>`), `handoffs` (open, or whose deferral date has come), or bare for a summary of both. |
 | `/gt:gt-handle` | Work through a set one at a time. Tasks: close, drop (reason required), defer to a future date, move to another project, or keep; IDs are refused if the line changed since it was listed. Handoffs: settle each item, then close as handled or defer to a date. Bare, it asks which. |
-| `/gt:gt-close` | Close a **project** (every open task and handoff decided — close, drop, move, or keep shelved at `p:: 7` — then graduation offered through gt-promote, then archived in place; `--move` relocates it to `Archive/`), a **task**, or a **handoff** (refused while a citing task is open). `gt_close.py`. |
+| `/gt:gt-complete` | Complete a **project** (every open task and handoff decided — complete, drop, move, or keep shelved at `p:: 7` — then graduation offered through gt-promote, then archived in place; `--move` relocates it to `Archive/`), a **task**, or a **handoff** (since 0.21.0 only when each open item is resolved; refused while a citing task is open). `gt_close.py`. **0.21.0 breaking:** this was `/gt:gt-close`. |
+| `/gt:gt-close` | *(0.21.0)* Close **this session**, the opposite of `/gt:gt-open`: write back what the session learned (gt-work) and release its claim on the vault. |
+| `/gt:gt-calibrate` | *(0.21.0)* Run the model calibration pass now: stage runs re-run one tier down, one tier up and one effort higher, a zero-context judge scores them, and each agent stage gets keep, move-down, move-up or raise-effort with the command to apply it. Alias for `/gt:gt-optimize --only calibration`; `plan --estimate` prices a pass first. |
+| `/gt:gt-forget` | *(0.21.0)* Retract a wrong fact everywhere the vault states it: every note that states it is listed, you choose, each chosen note gets a retraction marker (reason, date, the note that holds the right fact) through the write queue. Nothing is deleted. |
+| `/gt:gt-grant` | *(0.21.0)* Let one command through for a while without lowering your lockdown level: once, for N minutes or hours, or forever; lists live grants and revokes one. |
+| `/gt:gt-help` | *(0.21.0)* An offline page that plays any gt command's real output in a simulated terminal, with what it does, how it works and what to try next; a Getting started tab and a Workflows tab for your role. |
 | `/gt:gt-task` · `/gt:gt-handoff` · `/gt:gt-task-list` · `/gt:gt-handoff-list` · `/gt:gt-task-handle` · `/gt:gt-handoff-handle` | **Deprecated aliases**, working through 0.18.x: each says which verb replaced it and then does exactly what that verb does. |
 
 ### Knowledge Management
@@ -414,19 +428,19 @@ second level is a genuine sub-project created with `--parent`.
 
 ---
 
-## Lockdown levels (0.20.5)
+## Lockdown levels (0.20.5; renamed in 0.21.0)
 
-How much Claude may run without asking. Most of the friction in a session is approval prompts; a lockdown level is a set of Claude Code allow rules that gt writes into `~/.claude/settings.json` for the level **you** choose, so routine work stops asking. The installer asks for it (`./install.sh --lockdown <level>` to answer in advance; with no terminal a new install stays very secure and an upgrade keeps its level). Change it any time with `/gt:gt-settings lockdown <level>` (`gt_settings.py set lockdown <level>`), then restart Claude Code. gt writes and removes only its own rules, records them, backs `settings.json` up first and logs every change (`~/.claude/golden-thread/lockdown/`); uninstall takes them out. With gt unlock on, changing the level needs a fresh confirmation. gt never changes the level by itself.
+How much Claude may run without asking: strict (the default), trust local, trust network or insecure. Most of the friction in a session is approval prompts; a lockdown level is a set of Claude Code allow rules that gt writes into `~/.claude/settings.json` for the level **you** choose, so routine work stops asking. The installer asks for it (`./install.sh --lockdown <level>` to answer in advance; with no terminal a new install stays strict and an upgrade keeps its level). Change it any time with `/gt:gt-settings lockdown <level>` (`gt_settings.py set lockdown <level>`), then restart Claude Code. gt writes and removes only its own rules, records them, backs `settings.json` up first and logs every change (`~/.claude/golden-thread/lockdown/`); uninstall takes them out. With gt unlock on, changing the level needs a fresh confirmation. gt never changes the level by itself.
 
 <!-- lockdown-chart:start -->
 | Level | Runs without a prompt | Still asks |
 |---|---|---|
-| **very secure** | nothing added -- exactly what Claude Code asks today (default) | everything Claude Code asks today |
-| **mostly secure** | read-only shell (ls, cat, grep, wc, ...) and git (status, log, diff, show, branch); edits in the project; running tests; git add/commit | network, remote hosts, pushes, installs, deletes, anything not listed |
-| **partly secure** | mostly secure, plus ssh/scp/rsync, git push/pull/fetch, curl/wget, npm/pip/brew install, web fetch | any other shell command or edit outside the project |
-| **insecure** | partly secure, plus any shell command, any edit, web search | LOTR send/merge/delete still ask for consent |
+| **strict** | nothing added -- exactly what Claude Code asks today (default) | everything Claude Code asks today |
+| **trust local** | read-only shell (ls, cat, grep, wc, ...) and git (status, log, diff, show, branch); edits in the project; running tests; git add/commit | network, remote hosts, pushes, installs, deletes, anything not listed |
+| **trust network** | trust local, plus ssh/scp/rsync, git push/pull/fetch, curl/wget, npm/pip/brew install, web fetch | any other shell command or edit outside the project |
+| **insecure** | trust network, plus any shell command, any edit, web search | LOTR send/merge/delete still ask for consent |
 
-At every level above very secure, Claude's Read tool is denied credential files (ssh keys, cloud and gh credentials, Claude Code's login, .env). That guards the Read tool only: from mostly secure up a shell command can still print a file, so Core rule 3 (no secret's value in the session) remains the line. These levels reduce prompts; they are not a security boundary.
+At every level above strict, Claude's Read tool is denied credential files (ssh keys, cloud and gh credentials, Claude Code's login, .env). That guards the Read tool only: from trust local up a shell command can still print a file, so Core rule 3 (no secret's value in the session) remains the line. These levels reduce prompts; they are not a security boundary.
 <!-- lockdown-chart:end -->
 
 ## Install
@@ -435,7 +449,7 @@ See [INSTALL.md](INSTALL.md) for step-by-step instructions, including how to ins
 
 ```bash
 bash install.sh --vault <vault>     # gt plus every module that is on; then restart Claude Code
-bash install.sh --list-modules      # the nine modules, each one's state and why
+bash install.sh --list-modules      # the ten modules, each one's state and why
 bash install.sh --without demo      # leave one out; remembered
 ```
 

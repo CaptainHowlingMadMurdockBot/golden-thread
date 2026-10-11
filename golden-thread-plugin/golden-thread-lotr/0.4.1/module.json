@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "name": "lotr",
+  "plugin": "gt-lotr",
+  "version": "0.4.1",
+  "requires_gt": ">=0.21.0,<0.22.0",
+  "summary": "LOTR, one gateway to rule them all: a fixed four-tool MCP surface in front of any number of downstream connections, with a registry of who talks to whom, as whom, from which machine",
+  "default": "off",
+  "skills": [
+    "gt-lotr"
+  ],
+  "scripts": [
+    "lotr.py",
+    "lotrd.py",
+    "lotr_mcp.py",
+    "mcp.py"
+  ],
+  "templates": [],
+  "hooks": [],
+  "hookdir_scripts": [],
+  "settings": [
+    {
+      "key": "agent_split",
+      "default": "split",
+      "values": [
+        "split",
+        "combined"
+      ],
+      "summary": "LOTR agents: separate reader and writer agents (split), or one read/write agent per task (combined).",
+      "detail": "split     readers (jira, m365, github, runner) hold find + call_read only; writers hold\n          find + call_write (+ call_consent); a change is composed from your words alone  (default)\ncombined  one agent, gt-lotr:gateway, holds all four gateway tools: fewer hops, cheaper\n\nThe split is what stops text inside a read result (an issue body, an email) from steering a\nwrite, an injection. combined removes that protection, so it only takes effect while the\nlockdown level is insecure; at any other level it is ignored, the effective mode stays split,\nand the reason is stated. Irreversible operations (send mail, merge, delete) still go through\nthe consent step (call_consent, your Touch ID or Windows Hello) in either mode."
+    }
+  ],
+  "requires_modules": [],
+  "replaces_core": [],
+  "lockdown": {
+    "strict": {
+      "allow": [],
+      "deny": []
+    },
+    "trust-local": {
+      "allow": [
+        "mcp__plugin_gt-lotr_gt-lotr__find",
+        "mcp__plugin_gt-lotr_gt-lotr__call_read"
+      ],
+      "deny": []
+    },
+    "trust-network": {
+      "allow": [],
+      "deny": []
+    },
+    "insecure": {
+      "allow": [
+        "mcp__plugin_gt-lotr_gt-lotr__call_write"
+      ],
+      "deny": []
+    }
+  }
+}

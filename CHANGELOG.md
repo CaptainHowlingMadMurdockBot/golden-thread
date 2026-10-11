@@ -11,6 +11,399 @@ release's own summary line, kept short rather than reconstructed after the fact.
 
 ---
 
+## gt 0.21.0 — 2026-10-11
+
+Cut from 0.20.5 on 2026-10-07 (gt, demo, farm, flow, watch, report-card at 0.21.0; gt-usage 0.1.8,
+gt-lotr 0.4.1, gt-visualize 0.4.6, gt-wiki 0.2.9; `requires_gt >=0.21.0,<0.22.0`). Entries follow, grouped by theme.
+
+**Module versions in this release:** gt, gt-demo, gt-farm, gt-flow, gt-watch, gt-report-card **0.21.0**;
+**gt-pane 0.1.0 (new)**; gt-usage **0.1.8**; gt-lotr **0.4.1**; gt-visualize 0.4.6; gt-wiki 0.2.9. Every
+module requires gt `>=0.21.0,<0.22.0`.
+
+### Read this first: breaking changes and changed defaults
+
+- **Four settings change their default (owner, 2026-10-08).**
+  A new install now starts with `vault_hints` **on**, `agent_specialization` **on**, `skeptic_pass`
+  **on** and `test_tmpdir` **noindex** (all four shipped `off` before). An install that never set one
+  of them picks up the new default on upgrade; a value already written to `vault-config.json` is kept.
+  What it costs: `vault_hints` adds up to three title lines to each prompt (one file read, 0.8 s
+  budget); `agent_specialization` and `skeptic_pass` spend specialist agents on every ingest,
+  validation and `/gt:gt-work`; `test_tmpdir noindex` moves test throwaways to
+  `~/Library/Caches/gt-tests.noindex` (macOS) or `$XDG_CACHE_HOME/gt-tests` -- the known Intel
+  Homebrew Python snag with that folder still applies. `gt_settings.py set <name> off` turns any of
+  them back. The hard-coded fallbacks agree: the `vault_hints` hook, `gt_optimize_exec.py`'s
+  `test_tmpdir` check, `gt_agent_spec.py`'s standalone reader and `prun.py`.
+- **BREAKING: `/gt:gt-close` and `/gt:gt-complete` swapped meaning.** `/gt:gt-close` now closes the
+  *session* (the opposite of `/gt:gt-open`). Completing and archiving a project, task or handoff moved
+  to **`/gt:gt-complete`**. There is no alias: anything that typed `/gt:gt-close <project>` or
+  `/gt:gt-close task` must say `/gt:gt-complete` instead.
+- **BREAKING: the lockdown levels are renamed.** `very-secure`, `mostly-secure` and `partly-secure`
+  are now **`strict`**, **`trust-local`** and **`trust-network`**; `insecure` is unchanged. The old
+  names said "secure" about levels that only decide which commands Claude may run without asking: none
+  of them is a security boundary. There is no alias: `--lockdown mostly-secure`, an `--answers` file
+  and `/gt:gt-settings lockdown mostly-secure` must use the new name. A level already on your machine
+  carries over: the machine migration `lockdown-levels-renamed` rewrites it in
+  `~/.claude/golden-thread/lockdown/state.json` and `vault-config.json` (both backed up first), and
+  until it runs gt reads an old stored name as its new one, never as the default. The rules each level
+  writes are unchanged.
+- **Changed: Paranoid is the top rung of the security level, and the installer no longer asks the
+  separate paranoid question.** `--lockdown paranoid` (or `/gt:gt-settings lockdown paranoid`) applies
+  strict and turns the `paranoid` switch on; nothing new is stored, and the level shows as paranoid
+  whenever strict and the switch are both on. Leaving it for another level turns the switch off, with
+  the step-up that already needs. `--paranoid on|off` still works, for example trust-local plus
+  paranoid; `--lockdown paranoid --paranoid off` is refused as a contradiction. An install script that
+  passed `--paranoid` keeps working.
+- **Changed default: `expiry_guard` is `auto` under the `calibrated` token profile.** The setting
+  itself ships `warn-only`, but the `calibrated` profile (the install default) sets it to `auto`, and so
+  does `minimum`; `maximum` keeps `warn-only`; `manual` leaves what you set. `auto` compacts an idle
+  closed session headlessly while its prompt cache is warm, or makes a compacted `--fork-session` copy of
+  an open one. Go back with `/gt:gt-settings set expiry_guard warn-only`.
+- **Changed: hooks now ship with the plugin.** gt, gt-watch, gt-report-card, gt-usage and gt-pane carry
+  `hooks/hooks.json` (generated from the registry; all 29 gt hooks) and each entry dispatches through
+  `~/.claude/golden-thread/wired/`. On Claude Code **2.1.136 or newer** the plugin route is used and
+  gt's entries leave `~/.claude/settings.json`; older versions keep the settings.json route.
+  `--hook-mode` (or `GT_HOOK_MODE`) overrides. A hook is wired once either way, never both. Upgrading
+  from 0.20.5 moves gt's own settings.json hook entries out after a backup; hooks that are yours stay.
+- **Changed defaults:** `skeptic_pass` on, `skeptic_max_flags` 7, `skeptic_record_outcomes` on;
+  `next_step_hints` and `prompt_hints` on; `io_tools` on (the disk read tools are offered by default);
+  `model_calibration_runner` ships set, budget 2 USD, minimum 3 runs.
+- A new install **asks** its choices (see "Install through Claude asks every choice"). Without a
+  terminal, a *new* install with a security question unanswered exits **5** before installing.
+
+### Security: the `paranoid` group, installed-code integrity (#21)
+
+One master setting, **`paranoid`** (off by default), and its parts, each following the master unless set
+and each a security setting; status, doctor and show read `paranoid (partial)` when a part is off:
+
+- `os_lock` - `uchg` / read-only / `a-w` on gt's installed *code* only (hooks, packs, plugin cache,
+  marketplace); working data is never locked.
+- `code_write_gate` - a new presence gate (`gt-code-write`, scope `gt:code:write`); the installer,
+  component self-repair and uninstall unlock through it.
+- `bash_guard` - a PreToolUse(Bash) guard that catches writes and flag changes to protected paths
+  (ask or deny only, never allow).
+- `signed_manifest` - signed by the unlock key (else pinned and labelled weaker); each hook verifies its
+  own files in about 0.45 ms and fails closed if they were tampered with.
+- `plugin_dirs`, `require_unlock`.
+
+New `gt_paranoid.py`, `gt_integrity.py`, `gt_integrity_gate.py`, and a doctor `integrity` row. With
+`paranoid` off, every guard gives byte-identical decisions to before.
+
+### Security: single-use action tokens (#32)
+
+`paranoid.action_tokens` plus **15 per-action settings** (`disk_read`, `disk_list`, `net_fetch`,
+`disk_write`, `lotr_read`, `lotr_write`, `lotr_consent`, `vault_read`, `vault_write`, `secrets_unseal`,
+`git_push`, `git_commit`, `publish`, `grant_add`, `plan_bound`), each following its parent, then the
+master. You mint a token in a terminal with presence (`gt_action_token.py mint` / `mint-plan`); it is
+HMAC-signed, bound to the action, the exact target and the content, expires in minutes and is spent
+once by an atomic rename. Replay, retarget, expiry and forgery are refused with the mint command as the
+route. Hooks read `GT_ACTION_TOKEN`; new subcommands `gate`, `git-commit-gate` and `fingerprint` serve the hooks. The audit chain is keyed and holds no values. All 15 actions are enforced. gt-lotr's own
+daemon unsealing its credentials is exempt from `secrets_unseal`.
+
+### Security: I/O brokers, disk read, network fetch and disk write (#20)
+
+Three tools on the gt-vault server, each held by one agent that has nothing else:
+
+| Tool | Agent | Rule |
+|---|---|---|
+| `disk_read` / `disk_list` | `disk-reader` | Allowed inside the project's `source.md` repositories; elsewhere presence (Touch ID, Hello or TOTP). Real path resolved first; 1 MB cap with paging; contents wrapped as untrusted data. |
+| `net_fetch` | `net-fetcher` | GET only, no cookies or credentials; `io_fetch_allow` domains served, other public domains ask presence; private, loopback, link-local and metadata addresses never; every DNS answer checked, connection pinned, redirects re-checked (max 5); text types only, 1 MB cap. |
+| `disk_write` | `disk-writer` | One text file inside a git work tree; presence on **every** write or a live timed window for one repo or folder; backup before overwrite; never executable; no commit, push or subprocess; an unwritable audit stops the write. |
+
+- Never, even approved: `~/.claude`, shell start-up files, LaunchAgents/Daemons, `~/.ssh`, every `.git`
+  component, `.env` / `*.env` and key files, `.envrc`, `.gitattributes`, `.gitmodules`, credential
+  dotfiles, the vault, and CI workflow files (an owner-only lift, `io_write_ci=allow`).
+- `disk_read` and `net_fetch` withhold credential-shaped text (naming the rule and line, never the
+  value) and fail closed when the scan cannot run. `disk_write` refuses when no presence method is
+  enrolled and Claude Code is set to run the tool without asking.
+- Hardening from an independent security review: refuse a work-tree root that is `/`, home or a parent
+  of home; refuse to overwrite an executable; case-insensitive never-paths on every platform; Windows
+  alternate data streams and UNC roots; three declined prompts in 10 minutes cool down for 10 minutes.
+- Settings: `io_tools` (on), `io_read_allow`, `io_read_max_bytes`, `io_fetch_allow`, `io_fetch_max_bytes`,
+  `io_write_presence` (cannot be off), `io_write_ci`, `io_write_max_bytes`; `gt_settings.py io
+  show|allow`. The gates `io.read`, `io.fetch` and `io.write` are always on.
+
+### Security: per-module lockdown, timed grants, signing, `accept_review` (2B)
+
+- Per-module lockdown rules (a cumulative `lockdown` block per level), `/gt:gt-grant` timed grants
+  (never "allow"), the presence-gate registry, per-repo commit signing on/off, and PermissionDenied
+  guidance that names the setting to change.
+- **`accept_review`** (`dialog`, Touch ID only; or `full`, the whole commit first) for `gt accept`.
+- `agent_split` with a combined gateway agent for gt-lotr; the lockdown chart is generated from the
+  rules the code applies (`dev/check_lockdown_chart.py --write`).
+
+### Security: the testing profile (#40)
+
+`gt_settings.py testing on|off|status|sweep` (`gt_testing_profile.py`) pre-approves test runners, static
+scanners and gt's own dev test commands for one project (user scope only with `--scope user`), with
+optional `--sandbox` edits, `--until` expiry (swept at session start) and `--dry-run`. It records exactly
+what it added after a backup, and `off` removes only that. It never writes modes, hooks,
+skip-permissions or `GT_TEST_GATE`; every Core-rule gate is untouched. Setting `testing_profile`.
+
+### Security: more
+
+- **Secrets scan canary (#23)**: `gt_secrets.py --canary` builds a fake token at run time and proves it
+  is caught, at install and in doctor. The secrets packs now reach the hook copy (the hook copy lacked
+  `packs/` and found zero patterns).
+- **MCP servers outside LOTR (#24)** are named in `gt_settings.py security`, `show` and `explain`.
+- Publish scrub also checks the private working-copy name; a pre-push domain check hook.
+
+### Install through Claude asks every choice (#33), the guide and the pane (#36, #41)
+
+- `install.sh --questions [--json]` lists every install question in order, security first, with
+  plain-language options from each setting's `plain` field; it installs nothing. New flags:
+  `--token-profile`, `--reply-length`, `--persona-aligned`, `--open-guide`, `--with pane` /
+  `--without pane`, `--sandbox-mode`, `--paranoid`, `--expiry-guard`, `--statusline`, `--ast-grep`,
+  and `--answers FILE`.
+- Not at a terminal, a **new** install with a security question unanswered exits **5** before
+  installing, naming the flags. `--accept-defaults` is the explicit opt-out. The summary lists each
+  choice as yours, chosen for you, or NOT applied. Upgrades keep current values.
+- `/gt:gt-init` asks each choice with AskUserQuestion, security first, one review screen, then installs.
+- The last question, "Open the guide?" (`--open-guide`), opens `help.html` on a **Getting started** tab
+  for your role (skipped in CI, SSH and headless runs).
+- **New module gt-pane 0.1.0** (Claude Code 2.1.287 or newer): a 28-column "gt" pane of 12 bordered
+  buttons (hotkeys 1-9, 0, q, w) that send plain-words prompts as your own words. `/gt-pane-buttons` toggles, and so
+  does the x Claude Code draws on the pane's border; Arrange mode reorders. Your list is `~/.claude/golden-thread/pane/buttons.json`,
+  seeded once from your persona and never overwritten; edit it in place or in plain words. Narrow
+  terminals get a button row above the prompt; a footer shows one figure to a line:
+  the 5-hour and weekly allowance (read from gt-usage), then this session's context and the share of
+  the last turn the prompt cache served. Settings
+  `pane_at_start` (open, closed, off) and `pane_status`. The installer asks "Add the gt button pane?".
+
+### Help, hints and workflows (#34, #35, #37, #38)
+
+- **`/gt:gt-help <command>`**: one offline `help.html` with a simulated terminal that plays each
+  command's real output (63 variants recorded against the PizzaBot demo vault; stub agent packets are
+  labelled SAMPLE, no model calls), plus what it does, how it works, when to use it, what next.
+  `dev/release-check.sh` re-records and fails on a stale or missing page.
+- **Hints**: `next_step_hints` and `prompt_hints` (both on) add one `Next:` or `Tip:` line through
+  `systemMessage` only (no tokens); a plain block per command in all skills.
+- `hints_as_choices` offers the next steps as a clickable question (terminal and Claudian); the text
+  `Next:` line stays. A **Workflows** tab holds 13 role workflows written as conversations.
+- **Run it** on each workflow plays the whole recorded conversation in the terminal (what you say, then
+  every command Claude runs, in order) with a jump button per command (`#run:<id>`).
+- **A Security tab** (`/gt:gt-help security`, owner request): the four jobs (security level, paranoid,
+  gt unlock, sandbox) and a LOTR card (the measured token saving from gt-usage's savings ledger, and
+  why reading and acting are kept apart); every security level; **Try it**, a simulator that shows,
+  for each level and add-on, whether fourteen everyday actions run, ask you or are refused, each with
+  **Run it** to play the moment, answer Claude Code's permission prompt, and walk a simulated
+  fingerprint or single-use permit (offline; every verdict is worked out at build time from
+  `gt_lockdown`'s own rules and tested against them); **how this release was tested** (the test count
+  as the runner loads it, split into functionality / invalid input / adversarial by test name and into
+  nine areas, the gates before shipping, and what the tests do not prove); and every security setting
+  in full with the command that changes it. Its code and data ship in `help/help-security.js` beside
+  `help.html`; adding a test changes the counts, so `dev/help_record.py build` re-runs before release.
+- **`./install.sh --help security`** and **`gt_settings.py security --full`** print every security
+  setting, what it does and how to change it, read from the settings registry. The security-level
+  install question now says every other security item is its own switch, changeable at any time.
+- Every install question (and the review screen) opens with **two rows of asterisks**, so it is plain
+  where one ends and the next begins.
+
+### Token profile, reply length and the allowance note (#39, #42, #43)
+
+- **`token_profile`** (`minimum`, `calibrated`, `maximum`, `manual`) sets seven settings at once:
+  `model_profile` (economy, the calibration verdicts, very-high), `reply_length` (terse, brief, normal),
+  `skeptic_pass`, `vault_hints`, the cache-expiry guard (auto, auto, warn-only), ingest specialists
+  (on) and calibration runs (off, on, on). Change any one and it reads `manual (based on X)`. Shown at
+  the top of `/gt:gt-settings`; asked at install (default `calibrated`).
+- **`reply_length`** (`normal`, `brief`, `terse`): the per-turn hook adds one line asking Claude to keep
+  replies to that length; works in the terminal and Claudian.
+- **`allowance_note`**: above a threshold (default 90%) the per-turn hook adds the last saved 5-hour or
+  weekly reading and its age, so Claudian users see it. gt-usage 0.1.8 writes `latest.json`.
+
+### Models, cost and calibration (#13, #27-31, #44)
+
+- **`/gt:gt-settings models`** lists every agent type with model, effort, why, 7-day runs and estimated
+  cost, and its calibration verdict; `models set|reset|profile|apply-calibration`. `model_profile` is a
+  normal setting. `/gt:gt-calibrate` is an alias for `/gt:gt-optimize --only calibration`.
+- Calibration settings: `model_calibration_runner` (a security setting), `_min_runs`, `_remind_days`,
+  `_budget` (accepts `unlimited`), `_max_weekly_pct` (90), `_sample`, **`model_calibration_schedule`**
+  (`off`, `weekly`, `monthly`, `manual`; default manual). The next automatic run is counted from the
+  *last run of any kind*; a missed run happens once at the next session, never a backlog.
+- **Cost estimate**: `gt_model_calibrate.py plan --estimate` prices a run from the kept prompts before
+  anything is spent, with budget presets `home` (a subscription: a share of the weekly allowance) and
+  `corporate` (API billing: dollars per seat per month).
+- Kept prompts are pruned by **age** (`pipeline_prompt_keep`, 28 days, capped at 200 per stage) and
+  samples spread across the window; every pipeline route keeps its prompts (`pipeline_keep_prompts`).
+- **Ad-hoc agents get a model and effort by their task (`adhoc_agent_model`, new).** gt set the
+  model of its own agents only; an agent the session spawned ad hoc (`general-purpose`, `Explore`,
+  `Plan`, `claude`) carried none and ran on the session's model -- on the owner's machine, Opus for
+  a week of build helpers. A PreToolUse hook on the Agent tool now gives an un-modelled spawn its
+  type's tier from the intent pack (general-purpose sonnet medium, Explore haiku) through the tool's
+  `updatedInput`, proven live: a Haiku session's general-purpose spawn ran on Sonnet. `require`
+  refuses an un-modelled spawn instead; `off` restores the old behaviour. A named model, a plugin's
+  or your own agent, a fork, and `agent_models session` are never touched; it fails open.
+- **The savings ledger prices each agent against the session's model when the agent started.**
+  It used the session's most common model over the whole window, so a session that moved from Opus
+  to Sonnet made every agent it spawned in its Opus hours (which inherited Opus) look like an Opus
+  choice made under Sonnet. On the owner's machine that was a phantom cost of about 94M
+  token-equivalents, enough to turn a net saving into a reported net cost (found 2026-10-11).
+- **The savings ledger counts what the Core rules save, not only what they cost.** The overhead row
+  charged every injected rule and credited nothing. A new `Core rules (rework avoided)` row prices each
+  session's own work against a 90-run A/B benchmark (opus, sonnet and haiku; three task levels; rules
+  on and off; every failed run re-prompted until right): rules off, a finished task cost 1.262x, almost
+  all of it commits that broke the tests. The row is `estimated` (`GT_SAVINGS_CORE_RULES_FACTOR`
+  overrides the factor). A second row, `Core rules: leaks, releases, persona work`, is a `design` claim
+  outside the net: rules off, 7 of 15 runs pasted a live key into the reply (0 of 15 with them), and
+  a leak is a rotation no token row can see.
+- **Savings dollars use this generation's prices, and say whether they are a bill.** The price
+  table had no Claude 5.5 entries, so Opus 5.5 priced at the generic Opus $5 (list is $4), Sonnet 5.5
+  at $3 ($2) and Haiku 5.5 at $1 ($0.10): every savings and cache-cost dollar figure read about 25%
+  high on an Opus-heavy machine. New setting `savings_billing` (`subscription`, the default, or `api`):
+  on `api` the report names dollars as spend avoided and leads with what the Core rules are worth net
+  of their own cost.
+- **`gt_doctor` finds Git Bash on Windows.** Started from cmd.exe or PowerShell, as INSTALL.md
+  documents, the doctor ran gt's `.sh` hooks through a bare `bash`, which is not on PATH there
+  (Git for Windows adds `Git\cmd`, not `Git\bin`). Four post-install rows (`rule1-injected`,
+  `guard-denies`, `smoke-guard`, `smoke-rules`) then FAILed as "could not run" on a correct
+  install. It now finds `bash.exe` the way `install.cmd` does, never the WSL launcher (found
+  2026-10-11 by the first Windows clean-install gate run).
+- **Kept prompts carry their input.** A kept prompt whose `path` input sits in a temp folder or a
+  session scratchpad now has that input (only its unit, up to 4 MB) copied into the run's `inputs/`
+  folder and points at the copy; the copy is pruned with the last prompt naming it. Calibration also
+  excludes, before spending anything, any recorded run whose input is no longer on disk, and says how
+  many. Before this, a pass could replay prompts whose scratchpad had been deleted: every candidate
+  read nothing and the stage came back **INVALID RUN** (found 2026-10-11, all three extract samples).
+- **Findings calibration (#29)**: `findings_calibration` grades findings - no label above `unverified`
+  without attached evidence, observed symptom split from inferred mechanism, re-label only on your yes.
+- **Cache-expiry guard (#27)**: `expiry_guard` (warn-only, auto) with seven `expiry_guard.*` settings; a
+  Notification idle hook arms a one-shot job; a UserPromptSubmit backstop blocks the first prompt of a
+  large expired session once. Savings-ledger mechanism `expiry-guard`.
+- **#30 `later --until <date>`** in close-out (`closeout_later_days` 30; past dates refused).
+  **#31** gt-ingest uses specialist agents for the run (`ingest_specialists`) and reports the tokens it
+  kept out of your session.
+
+### Handoffs, tasks and doctor (#16, #17, #22, #25, #26)
+
+- **A handoff closes only when each open item is resolved** (closed, a task, or dropped with a reason).
+  Code makes the handoff id `H-YYYYMMDD-xxxx` and each item a block id `^hN`, cited by resolutions,
+  tasks and the close output; older handoffs are back-filled.
+- Close-out: blocked is not finished. Task fields may run over several lines.
+- Doctor: a stale scheduled-job failure with healthy access is an advisory WARN; a note when
+  `blockReadsOutsideWorkingDirectories` hides gt paths, with the `/add-dir` fix; an `integrity` row
+  and a secrets-pack row.
+
+### Personas (#19, #45)
+
+Eight persona packs (product-manager, project-manager, developer, executive, leadership, operations,
+dba, network-admin; scaffold only), the `persona` setting, `gt_persona.py`, persona-aware project
+creation. Each pack carries an `audience` line and 12 pane buttons. **`persona_aligned`** (on): agents
+that *write for you* (draft, briefs, summaries, wrap-ups) get an Audience block; fact-finding agents
+(extract, verify, validate) never do, so role changes presentation, never what is recorded as true.
+Applied at run time, no reinstall.
+
+### Vault, ingest and lotr (#1, #3, #8, #9, #11, #15, #18)
+
+- **Batch vault writes** apply wholly or not at all. Daily notes stop copying the template's
+  placeholder text. gt-ingest dedupes per finding and says "would apply" in dry-run.
+- **gt-lotr 0.4.1**: generic connection templates, the agent split with a combined gateway agent, a
+  lockdown block, and a fix for the `LOTR: {` line in `show`.
+- PreCompact checks for unsaved decisions. Lint no longer reports relative-folder links as broken.
+  The timestamp rule wording matches the hook.
+- **gt-usage 0.1.8**: the savings ledger (`/gt-usage:gt-usage-savings`) and `latest.json`.
+- A Windows clean-install release gate script (`dev/provision_windows_validation_box.py`).
+
+
+### gt-optimize can measure each agent stage's model and effort (off by default)
+
+Since 0.19.1 each specialist agent stage runs on a model picked by its task tier, and since
+0.20.0 at an effort too; both were judgement. A new setting, **`model_calibration`** (`off`, or
+`report`), adds a calibration pass to `/gt:gt-optimize` (`gt_model_calibrate.py`): recent runs
+of each stage are re-run one tier down, one tier up and **one effort higher**, a zero-context
+deep-tier adjudicator judges the outputs, and each stage gets **keep**, **move-down**,
+**move-up** or **raise-effort** with its agreement rate, missed and added findings, schema
+failures, refutations and the cost of each choice, plus the exact `gt_model_policy.py set
+--agent ...` command. **Nothing is applied.**
+
+- It spends allowance, so it is bounded: `model_calibration_sample` runs per stage and a
+  `model_calibration_budget` in USD. The pass prices itself first and refuses, running nothing,
+  when the estimate is over the budget.
+- Every sampled prompt goes through the intake scan again; one that fails is excluded, counted
+  and never sent. A stage with fewer than two recorded runs is reported as not calibrated, with
+  the reason. Runs are sampleable when their prompt was kept, which the workflow route does.
+- A runner (`--runner` or `GT_CALIBRATION_RUNNER`, for example `claude -p --model {model}
+  {effort_args} ...`) runs the pass unattended. Without one the skill spawns each unit with the
+  Agent tool, which takes no effort, so the effort runs are skipped and the report says so.
+- With the setting off, gt-optimize asks exactly the members it asked before and spends nothing.
+
+### Forget a wrong fact: `/gt:gt-forget` retracts the notes that state it
+
+When a fact in the vault turns out to be wrong, the notes that repeat it in passing went on being
+read as current. **`/gt:gt-forget "<the wrong statement>"`** (`gt_forget.py`) finds every note
+that states it (Knowledge, project files, global-memory) and lists each with its file, line and
+section, changing nothing. The owner picks; each chosen note (or one `## ` section of a long
+page) gets a retraction marker with the reason, the date and the note that now holds the right
+fact, written through the write queue, one request per note. **Nothing is deleted** and the rest
+of the note stays byte for byte.
+
+- A retracted note is supersession with a reason (`gt_supersede.py`): gt-open's listing leaves it
+  out, gt-query ranks it after current, expired and superseded notes as `[RETRACTED: <reason>]`,
+  and a note with only a section retracted is tagged `[PART RETRACTED: ...]`.
+- gt-lint has a new check, **`retraction-missing`**: a retraction whose `replaced_by` names a
+  note that does not exist.
+- A path outside the vault, or one the queue refuses (Sources/, Core rules, generated files), is
+  refused with exit 2.
+
+### Notes are ranked by when they were last USED, then last read (never expired by it)
+
+gt has logged every Knowledge read since 0.18.1, but gt-query and gt-optimize ignored it, and
+reads alone over-rank the pages every session loads and nothing changes because of (owner,
+2026-10-04: "If a rule is read and never used, wouldn't that make it irrelevant?"). A new
+`gt_use.py` reads two signals: the read log, and **use** — a page **cited** by a write-back
+dated on or after a read of it (research entry, handoff, ADR, design, another page), a session
+that read it and then **acted on** a file it names (from the `Session-Edit:` commit trailers),
+gt-query having **answered from** it (the skill records it), and a guard decision that
+**enforced** it (the three Core-rule guards record it when they deny).
+
+- **gt-query** (`gt_supersede.py rank`) orders equally ranked matches by last use, then last
+  read, and labels a Knowledge page unread for `knowledge_unread_days` (default 90) as
+  `[unread since <date>]`. Neither signal ever moves a note across the current, expired,
+  superseded and retracted bands. Keyword recall breaks score ties the same way, from the logs
+  only (the prompt-hints hook has a 0.8 s budget).
+- **gt-optimize** takes its unread threshold from the same setting, and adds pages **read often
+  but never used** (`knowledge_read_often` reads in 30 days, no use) as review candidates, with
+  their counts. **Core rules and pages marked `preventive: true` are never listed as unused**: an
+  obeyed rule never fires. They are listed apart (`preventive-read-unused`) with that caveat.
+- Nothing expires, moves or is hidden because of either signal. With no read log and no use log
+  every output is exactly what 0.20.0 printed. On the recall benchmark's fixture, which has no
+  read log, recall is unchanged (0.972 / 1.000 / 1.000).
+
+### Windows polish (extra)
+
+- **New vaults get `.gitattributes` with `* text=auto eol=lf`** (only when gt creates the vault's
+  repo). A Windows clone with git's default `core.autocrlf=true` checked the vault out as CRLF,
+  and frontmatter written `---\r\n` was no longer frontmatter to the tools.
+- **`gt_spool.read_owner` keeps CRLF.** It translated `\r\n` to `\n`, so its text no longer
+  described the file, and a CRLF `log.md` or `decisions.md` (a Windows checkout) could never pass
+  the migration gate. The baseline keeps the exact bytes; the generated file is LF, and the
+  migration now says "line endings converted from CRLF to LF".
+- **`package.sh` builds the zip with Python's `zipfile` when `zip`/`unzip` are missing** (native
+  Windows' Git Bash has neither), with each file's mode; the four packaging tests run there now.
+- The suite brings the three IANA zones it names (`tests/fixtures/zoneinfo`, public domain)
+  when the machine has no time-zone database, so the eight priority-window tests run on Windows.
+- gt-watch's skill says plainly that Windows has no cron: `check` fetches on demand, or a Task
+  Scheduler task of the user's own runs the command `install-cron` prints.
+
+### Vault findings no longer block a code commit (extra)
+
+The commit gate (`/gt:gt-allin-commit`)
+refused a commit to gt's own repo on findings from six members, most of them about the vault.
+Findings from `lint`, `optimize`, `runbooks`, `wiki` and `doctor`, which judge the vault or
+the install rather than the staged code, are now printed as ADVISORY in a code repository.
+They still block a commit in the vault itself, and a check that could not run still refuses.
+
+### The recall benchmark scores the prompt-hints hook (extra)
+
+(`gt_bench.py recall --hints`): the
+precision of the hints shown, the share of questions whose page was hinted, and the share
+given none. On the shipped fixture: precision 1.000, hit rate 0.278, silent 0.722.
+
+### install.sh offers gt-usage's status line (extra)
+
+At a terminal (default no) when no status line
+is configured; `gt_usage.py --setup-statusline` (gt-usage 0.1.8) adds it at any time and never
+replaces one that exists.
+
+
 ## gt 0.20.5 — 2026-10-07
 
 **Configurable lockdown: you choose how much Claude may run without asking.** 0.20.2–0.20.4 were

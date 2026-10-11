@@ -26,7 +26,7 @@ bad() { printf 'FAIL  %s\n' "$1"; fail=1; }
 # install with no vault and no flag stops with exit 4 rather than finishing with the
 # enforcement hooks inert, so the opt-out has to be explicit here — and exercising it
 # is worth as much as exercising the default.
-if bash "$HERE/install.sh" --no-vault >"$TMP/install.log" 2>&1; then ok "install.sh --no-vault"; else bad "install.sh"; sed 's/^/      /' "$TMP/install.log"; exit 1; fi
+if bash "$HERE/install.sh" --no-vault --accept-defaults >"$TMP/install.log" 2>&1; then ok "install.sh --no-vault"; else bad "install.sh"; sed 's/^/      /' "$TMP/install.log"; exit 1; fi
 VER=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/installed_plugins.json')))['plugins']['gt@golden-thread-plugin'][0]['version'])")
 SCRIPTS="$HOME/.claude/plugins/cache/golden-thread-plugin/gt/$VER/scripts"
 HOOKS="$HOME/.claude/golden-thread/hooks"
@@ -72,7 +72,7 @@ echo '{}' | "$HOOKS/inject_core_rules.sh" 2>/dev/null | grep -q 'CORE RULES' && 
 # "passed". Asking the DECLARATION what should be there is the only form of this
 # question that can fail when the answer is nothing.
 python3 "$HOOKS/gt_components.py" wiring "$HERE/golden-thread/$VER" >"$TMP/wiring.log" 2>&1 \
-  && ok "all declared hooks wired in settings.json" \
+  && ok "all declared hooks wired ($(python3 "$HOOKS/gt_components.py" hook-mode 2>/dev/null | sed 's/.*wired now: //') route)" \
   || { bad "declared hooks not wired"; sed 's/^/      /' "$TMP/wiring.log"; }
 
 # Two defects lived here until 2026-09-24, and each one hid the other.
@@ -90,14 +90,26 @@ python3 "$HOOKS/gt_components.py" wiring "$HERE/golden-thread/$VER" >"$TMP/wirin
 # parseable output. A hook this script has not heard of is reported as
 # unclassified rather than judged by whichever rule happens to fit -- a newly
 # wired hook should become visible here, not be absorbed by a neighbour's rule.
+#
+# Two routes since 0.21.0: settings.json's SessionStart blocks, and -- on the plugin route,
+# where settings.json carries none of gt's -- the installed plugins' hooks/hooks.json entries,
+# run exactly as Claude Code runs them (bash -c the shipped dispatcher line).
 python3 - >"$TMP/sessionstart.txt" <<'PY'
-import json, os
-d = json.load(open(os.path.expanduser("~/.claude/settings.json")))
+import glob, json, os
+try:
+    d = json.load(open(os.path.expanduser("~/.claude/settings.json")))
+except Exception:
+    d = {}
 for e in d.get("hooks", {}).get("SessionStart", []):
     for h in e.get("hooks", []): print(h["command"])
+if os.path.isdir(os.path.expanduser("~/.claude/golden-thread/wired")):
+    for hj in sorted(glob.glob(os.path.expanduser(
+            "~/.claude/plugins/cache/golden-thread-plugin/*/*/hooks/hooks.json"))):
+        for e in json.load(open(hj)).get("hooks", {}).get("SessionStart", []):
+            for h in e.get("hooks", []): print(h["command"])
 PY
 # Same lesson as the wiring check above: a loop over an empty list passes silently.
-[ -s "$TMP/sessionstart.txt" ] || bad "settings.json declares no SessionStart hooks to check"
+[ -s "$TMP/sessionstart.txt" ] || bad "no SessionStart hooks wired to check (settings.json or the plugins' hooks.json)"
 
 # Output, when there is any, must be a JSON object. Without this the silence arms
 # below would wave through a hook that printed a traceback to stdout.
@@ -112,7 +124,11 @@ while IFS= read -r cmd; do
   # inject_core_rules.sh at all, so that hook reported with an EMPTY name beside a
   # payload the reader would naturally attribute to whichever hook was named last.
   name=$(printf '%s' "$cmd" | tr ' ' '\n' | grep -E '\.(py|sh)$' | head -1)
-  name=${name##*/}; [ -n "$name" ] || name="$cmd"
+  name=${name##*/}
+  case "$cmd" in   # a plugin-route dispatcher names its script after "SessionStart__"
+    *"/wired/SessionStart__"*) name=${cmd#*/wired/SessionStart__}; name=${name%%\"*} ;;
+  esac
+  [ -n "$name" ] || name="$cmd"
   out=$(echo '{}' | bash -c "$cmd" 2>/dev/null); rc=$?
 
   if [ "$rc" != 0 ]; then bad "SessionStart $name exited $rc"; continue; fi
