@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "name": "developer",
+  "title": "Developer",
+  "description": "A spec stub, and a commands-and-gotchas section in the runbook.",
+  "audience": "Technical and direct: lead with the change and why; include file paths, commands and code where they help; note gotchas and what was tested.",
+  "scaffold": {
+    "files": [
+      {"path": "spec.md", "content": "# {TITLE} spec\n\n<!-- Written when design.md is settled: behaviour, interfaces, acceptance checks. -->\n\n## Behaviour\n\n## Interfaces\n\n## Acceptance checks\n\n"}
+    ],
+    "sections": [
+      {"file": "runbook.md", "heading": "Commands and gotchas", "body": "<!-- Build, test and run commands that work, and the traps already met. -->\n"}
+    ]
+  },
+  "pane": [
+    {"label": "Start my day", "prompt": "Start my day: show what is waiting for me, what is overdue and what I should do first."},
+    {"label": "Overdue", "prompt": "Show my overdue tasks."},
+    {"label": "Add a task", "prompt": "I want to add a task. Ask me what it is and which project it belongs to."},
+    {"label": "Plan this change", "prompt": "Plan the change I am about to make before any code is written."},
+    {"label": "Build the plan", "prompt": "Implement the approved plan one phase at a time, test first."},
+    {"label": "Run all checks", "prompt": "Run every check on this repo and tell me how many actually ran."},
+    {"label": "Commit when green", "prompt": "Commit once the checks pass and a test receipt covers the changes."},
+    {"label": "Save learnings", "prompt": "Write down what we learned in this session."},
+    {"label": "Write a handoff", "prompt": "Write a handoff for the next session so nothing is lost."},
+    {"label": "Open a project", "prompt": "Open a project for me. Ask me which one."},
+    {"label": "Find in my notes", "prompt": "Look something up in my notes. Ask me what I am looking for."},
+    {"label": "Check gt", "prompt": "Check that my gt install is healthy."}
+  ]
+}

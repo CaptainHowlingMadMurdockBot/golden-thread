@@ -11,6 +11,19 @@ release's own summary line, kept short rather than reconstructed after the fact.
 
 ---
 
+## gt 0.21.1 — 2026-10-11
+
+- **gt-usage 0.1.9: the savings report is easier to read.** A TOTAL row sits under the columns (its
+  saved figure is the net), numbers carry thousands separators, and the header says what the window is
+  (by default the last 7 days, rolling: each run shows the 7 days before it, while the ledger keeps
+  every day) and what the columns mean: actual is what the work used with gt, counterfactual the same
+  work without that mechanism, saved the difference (a negative is an extra cost, not a saving).
+- **The write queue rides out a transient macOS refusal.** A rename or delete in the queue folder
+  could fail `Operation not permitted` for a moment and then succeed; the write was reported as
+  failed and a `.req.*.tmp` file was left behind. On macOS that error is now retried for up to a
+  second (never under gt sandbox mode, whose refusals must reach the inbox fallback at once, and
+  never for a plain permission denial), and every drain removes queue temp files older than a day.
+
 ## gt 0.21.0 — 2026-10-11
 
 Cut from 0.20.5 on 2026-10-07 (gt, demo, farm, flow, watch, report-card at 0.21.0; gt-usage 0.1.8,

@@ -1,0 +1,28 @@
+---
+name: gt-task
+description: "Deprecated alias — use /gt:gt-create task. Still works, and will be removed in a future release: it does exactly what /gt:gt-create task does (create a task)."
+plain:
+  - cmd: "/gt:gt-task"
+    does: "Old name for /gt:gt-create task."
+    how: "Does exactly what /gt:gt-create task does. It will be removed in a later release."
+    when: "Only if you still type the old name."
+    next: "/gt:gt-create task"
+model_intent: balanced
+---
+
+# gt-task (deprecated alias)
+
+**First, print this one line to the user, verbatim:**
+
+> Note: gt-task is deprecated. Use /gt:gt-create task instead.
+
+Then do exactly what `/gt:gt-create task` does: read `<base_dir>/../gt-create/SKILL.md` — `<base_dir>` is the
+path in this skill's `Base directory for this skill:` header. Take the vault location and the
+tool paths from the top of that file, then follow its
+**`## Task`** section, with whatever the user passed to this command as that section's
+argument. That section is this command's procedure, moved there unchanged in 0.18.1
+(verb-first vocabulary: one verb per action, the artifact as its argument), so the result is the
+same. Skip that file's sections for the other artifacts.
+
+This alias has no trigger phrases of its own — they moved to `gt-create` — and it will be removed in a
+future release.
