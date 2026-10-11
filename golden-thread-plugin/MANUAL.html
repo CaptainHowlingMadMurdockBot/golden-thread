@@ -308,6 +308,15 @@ them, so <code>/gt:gt-validate</code> names what actually runs.</p>
 <p><strong>Specialist agents are set by the task, not the profile.</strong> An agent's spec tier picks its model —
 classify and draft haiku, extract and place sonnet, reconcile, verify and generalize opus —
 whatever profile the skills use. The <code>agent_models</code> setting (<code>task</code> default, <code>session</code>) turns it off.</p>
+<p><strong>Ad-hoc agents get a model by their task too (0.21.0).</strong> An agent the session spawns on its own
+(<code>general-purpose</code>, <code>Explore</code>, <code>Plan</code>, <code>claude</code>) carries no model, so before 0.21.0 it ran on
+whatever model the session was on. A PreToolUse hook on the Agent tool (<code>gt_agent_model.py</code>) now
+gives an un-modelled spawn its type's tier from the intent pack: <code>general-purpose</code>, <code>claude</code> and
+<code>Plan</code> the balanced tier (sonnet, medium effort), <code>Explore</code> the fast tier (haiku). A spawn that names
+a model, a plugin's or your own agent type, and a fork are never touched, and nothing is when
+<code>agent_models</code> is <code>session</code>. <code>adhoc_agent_model</code> (<code>task</code> default, <code>require</code>, <code>off</code>): <code>require</code>
+refuses an un-modelled spawn with the reason. <code>gt_agent_model.py resolve Explore</code> shows what a type
+gets; <code>gt_model_policy.py set --agent general-purpose --model opus --effort high</code> overrides one type (model and effort).</p>
 <p><strong>Each stage is a plugin agent that carries its effort too (0.20.1).</strong> gt ships one agent
 definition per stage in <code>agents/&lt;stage&gt;.md</code>, run as <code>gt:extract</code>, <code>gt:classify</code>, <code>gt:reconcile</code>,
 <code>gt:draft</code>, <code>gt:verify</code>, <code>gt:generalize</code> and <code>gt:place</code>. Each is generated from its stage spec's
@@ -416,7 +425,7 @@ first, then the pages). <code>gt_bench.py recall --fixture DIR [--retriever keyw
 measures any retriever on a fixed question set: recall@1/3/10, files read and approximate tokens
 per question; a retriever that cannot load is could-not-run, never zero. The synthetic fixture
 is <code>tests/fixtures/recall-bench</code> (36 questions).</p>
-<p>The <code>vault_hints</code> setting (default <code>off</code>) adds a UserPromptSubmit hook that matches each prompt
+<p>The <code>vault_hints</code> setting (default <code>on</code> since 0.21.0; <code>off</code> in 0.19.1–0.20.x) adds a UserPromptSubmit hook that matches each prompt
 against <code>index.md</code> only and adds at most three <code>- &lt;title&gt; — &lt;path&gt;</code> lines — never a page body,
 nothing below its threshold or past its 0.8 s budget.</p>
 <h3 id="what-gtgt-scan-can-check-and-how-to-ask">What <code>/gt:gt-scan</code> can check, and how to ask</h3>
@@ -1492,7 +1501,7 @@ remember at the end of a session — the step that gets skipped:</p>
 </table>
 <p>To pin a finding so the digest always carries it, add <code>[pinned]</code> to its <code>##</code> heading in
 <code>research.md</code> — the one edit to an existing entry this allows.</p>
-<p><strong>The skeptic pass (<code>skeptic_pass</code>, off by default).</strong> With it on, gt-work spawns a zero-context
+<p><strong>The skeptic pass (<code>skeptic_pass</code>, on by default since 0.21.0).</strong> With it on, gt-work spawns a zero-context
 skeptic over the research entries about to land, before they land. Since 0.18.1 it needs nothing
 else: in 0.17.x it ran only when <code>agent_specialization</code> was also on, so turning the skeptic on also
 handed ingest and validation to specialist agents.</p>
@@ -2917,7 +2926,7 @@ install (<code>gt_settings.py set</code>, <code>gt_sandbox.py</code>, <code>gt_m
 <code>post-install</code>, <code>vault_init.py fresh</code> / <code>install-core-rules</code>), whole-vault rewrites
 (<code>gt_upgrade.py run</code>, rename / merge / archive <code>--move</code> of a project), <code>gt_sync.py</code>, Core-rule
 files, the demo, watches. Every SKILL.md starts with its own route table, and
-<code>tests/test_skill_sandbox_routes.py</code> fails if a skill names a vault script with no route.</p>
+a test fails if a skill names a vault script with no route.</p>
 <h3 id="designmd-and-global-memory-are-yours-0202">design.md and global-memory/ are yours (0.20.2)</h3>
 <p>No gt MCP tool edits <code>design.md</code> (in any project) or anything under <code>global-memory/</code> — with
 sandbox mode on or off. <code>vault_queue_write</code> and every operation tool that takes a path
@@ -4163,13 +4172,13 @@ is registered here and can be switched off.</p>
 <tr>
 <td><code>skeptic_pass</code></td>
 <td><code>off</code> · <code>on</code></td>
-<td><code>off</code></td>
+<td><code>on</code></td>
 <td>On its own (since 0.18.1), makes <code>/gt:gt-work</code> spawn a zero-context skeptic over the research entries about to land. It does not turn on specialist ingest or validation</td>
 </tr>
 <tr>
 <td><code>agent_specialization</code></td>
 <td><code>off</code> · <code>on</code></td>
-<td><code>off</code></td>
+<td><code>on</code></td>
 <td>Hands the agent stages of ingest, promote and gt-work (stage × kind specs, 0.18.1) and <code>/gt:gt-validate</code> to specialist agents. Since 0.18.1 it does not affect the gt-work skeptic</td>
 </tr>
 <tr>
@@ -4295,7 +4304,7 @@ is registered here and can be switched off.</p>
 <tr>
 <td><code>test_tmpdir</code></td>
 <td><code>off</code> · <code>noindex</code></td>
-<td><code>off</code></td>
+<td><code>noindex</code></td>
 <td>Where the test runner puts throwaway files; <code>noindex</code> = <code>~/Library/Caches/gt-tests.noindex</code> on macOS, <code>$XDG_CACHE_HOME/gt-tests</code> elsewhere (0.18.1)</td>
 </tr>
 <tr>
@@ -4305,9 +4314,15 @@ is registered here and can be switched off.</p>
 <td>Each specialist agent's model set by its task (haiku/sonnet/opus by tier), whatever the skill profile; <code>session</code> passes no model (0.19.1). Since 0.20.1 the stage agent definitions carry model and effort, and changing this rewrites them at once. See <a href="#model-and-effort-profiles-gt_model_policypy-0191">Model and effort profiles</a></td>
 </tr>
 <tr>
+<td><code>adhoc_agent_model</code></td>
+<td><code>task</code> · <code>require</code> · <code>off</code></td>
+<td><code>task</code></td>
+<td>An ad-hoc Agent spawn (<code>general-purpose</code>, <code>Explore</code>, <code>Plan</code>, <code>claude</code>) that names no model gets its type's tier from the intent pack (sonnet medium; Explore haiku); <code>require</code> refuses it; <code>off</code> leaves it on the session's model (0.21.0). See <a href="#model-and-effort-profiles-gt_model_policypy-0191">Model and effort profiles</a></td>
+</tr>
+<tr>
 <td><code>vault_hints</code></td>
 <td><code>off</code> · <code>on</code></td>
-<td><code>off</code></td>
+<td><code>on</code></td>
 <td>Up to three vault page titles relevant to each prompt, from <code>index.md</code> only, never a page body (0.19.1). See <a href="#recall-benchmark-and-prompt-hints-gt_keyword_recallpy-0191">Recall benchmark and prompt hints</a></td>
 </tr>
 <tr>
@@ -5685,7 +5700,7 @@ claimed stays queued (Core rule 1). Generated and protected files (<code>log.md<
 <code>decisions.md</code>, <code>Sources/</code>, <code>core-rules/</code>) are refused; <code>design.md</code> and <code>global-memory/</code> always go
 to the owner, recognised by identity rather than spelling (see <em>Writing to the shared files</em>). Decisions are logged to <code>spool/broker/log-&lt;date&gt;.jsonl</code>. gt-farm files its results
 this way, and a farmed result can only create a new file, never edit an existing note (ADR-8).</p>
-<p><strong>Specialist agents by job type (<code>agent_specialization</code>, off by default).</strong> With it on,
+<p><strong>Specialist agents by job type (<code>agent_specialization</code>, on by default since 0.21.0).</strong> With it on,
 <code>/gt:gt-ingest</code> hands work to a specialist agent (<code>ingest-code</code>, <code>ingest-docs</code>, <code>ingest-tool</code>) and
 <code>/gt:gt-validate</code> gives each validator a <code>validate</code> spec that loads <strong>no</strong> vault context. With
 <code>skeptic_pass</code> also on, <code>/gt:gt-work</code> has a skeptic agent flag unverified or overclaimed figures in

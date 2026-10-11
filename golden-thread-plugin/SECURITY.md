@@ -27,8 +27,7 @@ real boundary against the agent needs **L3** — the authority as a separate, ad
 service — which **0.20.1 does not ship**.
 
 An independent security review of 0.20.1 (2026-10-03) reproduced seven bypasses of the gate by
-a same-user process. Each was fixed, and each is now a regression test
-(`tests/test_unlock_review_regressions.py`, `tests/test_lotr_review_regressions.py`); what
+a same-user process. Each was fixed, and each is now a regression test; what
 cannot be fixed without L3 is written down in section 4 instead of being claimed away.
 A second, fresh-context review (2026-10-04) found more: the sandbox's inbox could be raced into
 copying a read-denied file (the TOTP seed) into the vault, an orphan could give itself a terminal
@@ -36,8 +35,7 @@ and read without unlocking, an older signed policy approval could be replayed, a
 own settings could loosen the sandbox unreported, the file tools could plant code where Claude
 Code or your shell loads it, and requests could name a session they do not belong to. Each is
 fixed or, where it cannot be prevented at L1/L2, reported and written down here; each
-demonstrated bypass is a regression test (`tests/test_inbox_review2.py`,
-`tests/test_sandbox_review2.py`, `tests/test_unlock_review2_regressions.py`).
+demonstrated bypass is a regression test.
 
 What was built, and what each piece really does:
 
@@ -660,8 +658,8 @@ paths as names, and `vault_project create` makes a new project's `design.md` fro
 **Every skill works under it (0.20.2).** Each vault step a skill used to run from the shell has a
 route: a gt-vault MCP tool that runs the same script with the same checks (8.2), or — for the
 steps that change settings, install state or the whole vault — an honest "run this from a
-terminal". Each SKILL.md carries the table, and a test holds every skill of every gt plugin to it
-(`tests/test_skill_sandbox_routes.py`). Sandbox mode is no longer a preview.
+terminal". Each SKILL.md carries the table, and a test holds every skill of every gt plugin to it.
+Sandbox mode is no longer a preview.
 
 > **Preview in 0.20.1.** The fence is what this section says it is. What is not finished is the
 > work inside it: most skills still run gt's vault scripts from the assistant's shell, and the
@@ -834,7 +832,7 @@ queued to the inbox and was applied by a drain outside. Claude Code's translatio
 `settings.json` into that runtime, and the file-tool permission rules, were checked by
 configuration (`claude sandbox status` reports the sandbox enabled and strict), not by a live
 Claude session. On 2026-10-04 the same runtime ran the review's inbox race for real
-(`tests/test_inbox_review2.py`, `H1LiveRace`): a writer inside it swapped an inbox file for a
+in a live test: a writer inside it swapped an inbox file for a
 symlink to the TOTP seed about 8,000 times while the broker drained about 11,000 times outside —
 nothing reached the vault, where the pre-fix broker copied the seed in in the same test; the
 runtime itself refused a hard link to the seed.

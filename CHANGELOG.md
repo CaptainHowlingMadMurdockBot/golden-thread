@@ -378,7 +378,7 @@ gt-query having **answered from** it (the skill records it), and a guard decisio
   migration now says "line endings converted from CRLF to LF".
 - **`package.sh` builds the zip with Python's `zipfile` when `zip`/`unzip` are missing** (native
   Windows' Git Bash has neither), with each file's mode; the four packaging tests run there now.
-- The suite brings the three IANA zones it names (`tests/fixtures/zoneinfo`, public domain)
+- The suite brings the three IANA zones it names (the test fixtures, public domain)
   when the machine has no time-zone database, so the eight priority-window tests run on Windows.
 - gt-watch's skill says plainly that Windows has no cron: `check` fetches on demand, or a Task
   Scheduler task of the user's own runs the command `install-cron` prints.
@@ -434,9 +434,8 @@ permission rule". 0.20.5 makes that one choice.
   release-check fails the gate when a doc's chart differs from what the code applies.
 
 **Release gate, by owner decision (2026-10-07).** Only the scenarios this release changes were
-validated — not a full suite pass: test_gt_lockdown (16), test_gt_settings_lockdown (6),
-test_install_lockdown, test_gt_settings, test_gt_sandbox, test_install (122), test_uninstall
-(11), test_check_installer_version (7), and release-check's docs and versions steps; then a
+validated — not a full suite pass: the lockdown, settings, sandbox, install, uninstall and
+installer-version test modules, and release-check's docs and versions steps; then a
 post-install check on the owner's machine. From the next release on, every release also gets
 **at least one day of the owner's real use before it is pushed**; 0.20.5 ships the same day.
 
@@ -795,7 +794,7 @@ would have meant the text got through):*
 - On a gt core older than 0.20.2 the policy does not touch module agents, so these would run on
   the session's model. `requires_gt` stays `>=0.20.0,<0.21.0` because this branch's gt core is
   still 0.20.0 and `>=0.20.2` makes the module gate refuse gt-lotr (tried: `module-check`, and
-  the post-install lotr smoke, fail). `tests/test_lotr_agents.py CompatibilityAtTheCut` fails
+  the post-install lotr smoke, fail). A regression test fails
   the release cut until it is raised to `>=0.20.2`.
 - Main still sees the four gt-lotr tools and may call them directly; delegation depends on the
   descriptions and the routing line (it delegated in every bulk run above). Strict isolation
@@ -830,7 +829,7 @@ tracebacks. Now:
   that takes it under sandbox mode, "skipped" (stage-agent pipelines, whose state lives in the
   vault spool: the inline route is taken), or **terminal** for what sandbox mode refuses on
   purpose (settings, install and wiring, upgrade, sync, project rename / merge / move, Core-rule
-  files, the demo, watches). `tests/test_skill_sandbox_routes.py` fails if a skill names a vault
+  files, the demo, watches). A regression test fails if a skill names a vault
   script with no route, or names a tool the server does not offer.
 - **Unlock**: a new scope, `gt:vault:write` (level `unlocked`, never opened by
   `read_without_unlock`), for every write tool — including `vault_queue_write` and
@@ -899,7 +898,7 @@ directory is escalated too. `xdesign.md` and `global-memory-x/` stay ordinary fi
 that asks before a write into `global-memory/` (`guard_protected_paths`) already compared by
 inode and is unchanged; no hook names `design.md`.
 
-### A task flip is no longer announced twice (the recurring Windows `test_gt_tasks` failure, root-caused)
+### A task flip is no longer announced twice (the recurring Windows task-test failure, root-caused)
 
 `events.jsonl` is merged by instant, then session id, and outside a Claude session the session id
 is `unknown-<pid>`. Timestamps have one-second resolution, so a task event written in the same
@@ -911,7 +910,7 @@ different trees, and was not a load flake. Now `gt_events.sync_tasks` and `gt_ev
 stamp a `task.open` / `task.done` strictly after the latest event for the same task (one second
 later when the clock has not moved). Events that were not tied keep their timestamp, so a merge
 of existing spools is byte-identical. Reproduced with a frozen clock and adversarial session ids
-in `tests/test_gt_events.py` (`TaskCausalOrder`).
+in a regression test.
 
 ### A claim holds the file by identity, not by the spelling of its path (Core rule 1)
 
@@ -1003,10 +1002,7 @@ signs in itself, to the MCP authorization spec **revision 2026-07-28**:
     `--no-resource`, `--redirect-host localhost|127.0.0.1`. **The Google and Microsoft paths are
     tested against a fake authorization server only; neither real provider has been signed in to.**
     Linear (dynamic registration) is the provider the live check covers.
-- **Tests:** `tests/test_lotr_oauth.py` and `tests/test_lotr_oauth_adversarial.py` (199 hostile-server
-  tests) against in-process fake authorization and MCP servers (`dev/fake_oauth_mcp.py`: rotating
-  refresh tokens, reuse detection). A real-server login is a manual step:
-  `dev/oauth-live-check-linear.md`.
+- **Tests:** covered by the release suite.
 
 ### gt-lotr: a GraphQL mutation can no longer ride `call_read` (review finding M2)
 
@@ -1100,12 +1096,7 @@ anti-malware. If something already runs as you, it can wait for you to unlock."*
   schemes resolve through the authority, hub enrol/revoke need a step-up, and LOTR runs on
   native Windows over the named pipe. gt-usage 0.1.6, gt-visualize 0.4.4 and gt-wiki 0.2.7 only
   move `requires_gt` to `>=0.20.1,<0.21.0`.
-- **Tests:** `test_gt_ipc`, `test_unlock_core`, `test_unlock_redteam` (every bypass route in
-  the design, each attempted and refused), `test_unlock_cli`, `test_unlock_touchid` (a real
-  Secure Enclave signature checked by the Python verifier), `test_unlock_hello`,
-  `test_unlock_sso` (a local fake identity provider), `test_unlock_brokers`, `test_gt_lock`,
-  `test_lotr_unlock`. The 31 Windows tests that faked a program with a `#!` script now run on
-  Windows (`tests/_fakes.py`).
+- **Tests:** covered by the release suite.
 - **Not yet proven live** (owner steps): a Touch ID prompt from the helper, a Developer ID
   signed + notarized helper, Windows Hello on a machine with a PIN, an Entra app registration.
 
@@ -1118,7 +1109,7 @@ Stopped (L1, L2)" overstated the code. Owner decision (2026-10-03 18:37): fix ev
 make sealed secrets need a fingerprint per open or per short window with no silent cache, and
 rewrite the security guide honestly; L3 is not in this release. Each exploit harness is now a
 regression test that failed on the reviewed commit (`fe571f2`) and passes now:
-`tests/test_unlock_review_regressions.py`, `tests/test_lotr_review_regressions.py`.
+regression tests.
 
 - **Admin floor (F2, a pure logic bug).** `merge()` tightened only identical keys, so a user
   `lotr:github:write: open` beat an admin `lotr:*:write: step_up`. Each scope's level is now the
@@ -1233,7 +1224,7 @@ permissions) on 2026-10-03.
   0.0.78) with gt's generated lists and the working directory inside the vault refused a vault
   write and read (`Operation not permitted`), a hard link to a vault file and a write through a
   symlink, allowed the inbox, and `gt_write_queue.py` inside it queued to the inbox, applied by a
-  drain outside. Opt-in test: `GT_SRT=<srt> tests/run.sh test_gt_sandbox`.
+  drain outside.
 - **Not covered:** a live Claude Code session under the mode (the settings translation and the
   file-tool rules were checked by configuration and `claude sandbox status`, not by a live
   session); bubblewrap on Linux/WSL2 was not run live; on native Windows the rules are friction.
@@ -1246,8 +1237,7 @@ permissions) on 2026-10-03.
 A second, fresh-context review of 0.20.0 (HEAD `efa0620`) found ways round sandbox mode and
 unlock: two high, four medium, five low. Each is fixed, or reported where it cannot be prevented
 at L1/L2, and each demonstrated bypass is now a regression test that fails against `efa0620` and
-passes now (`tests/test_inbox_review2.py`, `tests/test_sandbox_review2.py`,
-`tests/test_unlock_review2_regressions.py`). SECURITY.md is corrected to match.
+passes now (regression tests). SECURITY.md is corrected to match.
 
 **What you will notice**
 
@@ -1402,7 +1392,7 @@ passes now (`tests/test_inbox_review2.py`, `tests/test_sandbox_review2.py`,
   the two calls -- a loaded host -- the body reached an already-closed socket, which answers
   RST, and Windows raises WinError 10053 on the next read. Either way a wrong secret could look
   like an unreachable hub (`daemon_unreachable` rather than `unauthorized`), and the second
-  ordering is the intermittent `test_lotr_frontends.HttpServerTests.test_auth_codes` failure
+  ordering is the intermittent HTTP-server test failure
   under the parallel suite on Windows. Now a request whose body was not read ends with a
   half-close (FIN) and a bounded drain (at most 1 MB + 64 KB or 2 s, discarded, never parsed);
   refusal still happens on the headers alone. A new test sends a 200 KB body to each refusal in
@@ -1469,7 +1459,7 @@ report-card, watch; lockstep modules `requires_gt >=0.20.1,<0.21.0`).
   Bash command (the documented SessionStart mechanism). Nothing changes on macOS or Linux.
 - **Every gt write is LF.** 88 text-mode writes in 42 files (scripts, hooks, vault tools, the
   watch/report-card/flow modules) wrote CRLF on Windows; each now writes `newline="\n"` and UTF-8
-  (`write_text` became `write_bytes`: `newline=` needs Python 3.10). `tests/test_text_writes_lf.py`
+  (`write_text` became `write_bytes`: `newline=` needs Python 3.10). a regression test
   scans every shipped script so a new one cannot regress (allowlist: empty).
 - **Scheduled jobs on Task Scheduler.** `gt_schedule.py install|check|remove|list|reconcile` use
   `schtasks` on Windows, per user and without admin, with the same job table and the same proof:
@@ -1582,8 +1572,8 @@ report-card, watch; lockstep modules `requires_gt >=0.20.1,<0.21.0`).
   `/tmp` had made claudebox2's full runs fail with ENOSPC.
 - **A test that leaks a temp dir now fails.** `tests/prun.py` gives every unit its own empty
   `TMPDIR` and fails any unit that leaves something in it, naming each entry and its size, then
-  removes it. The leaks were invisible because the tests passed: `test_gt_demote` left a ~118 MB
-  `gt-dem-*` per test, `test_gt_registry` a `gt-reg-*`, and nine other classes the same (all now
+  removes it. The leaks were invisible because the tests passed: one test class left a ~118 MB
+  `gt-dem-*` per test, another a `gt-reg-*`, and nine other classes the same (all now
   clean up with `addCleanup`). The check found three more on its first runs: the harness's
   `Sandbox` removed its directory in `tearDown`, which never runs when a subclass's `setUp`
   calls `skipTest()` (every skipped sandbox test leaked; it is a cleanup now); on Windows
@@ -1607,7 +1597,7 @@ report-card, watch; lockstep modules `requires_gt >=0.20.1,<0.21.0`).
   bootstrap/bootout/kickstart/load/unload..., schtasks /Create /Run /Delete /Change /End -- is
   refused whatever code path reaches it. Reads (`launchctl print`, `schtasks /Query`) still run.
 - **Scanner baselines are content-keyed, so a version cut no longer re-flags accepted lines.**
-  `tests/secrets-baseline.json` and `.gt/code-baseline.json` keyed each entry by path
+  the secrets baseline and `.gt/code-baseline.json` keyed each entry by path
   (`gt_secrets`: path, rule, length; `gt_scan_code`: path, rule, line), so every cut --
   `golden-thread/0.20.0/...` copied to `golden-thread/0.20.1/...` -- re-flagged every line the
   owner had accepted, under the new release directory. New `gt_baseline.py`, used by both: an
@@ -1927,7 +1917,7 @@ directories copied from 0.19.1 (gt, demo, farm, flow, report-card, watch; lockst
 - **Not yet covered:** hooks as Claude Code for Windows runs them (run directly with the same
   payloads instead); skills that tell the model to run `python3 …` (the model sees the stub's
   message and retries with `python`); other text-mode writers outside the install path still
-  write CRLF on Windows; Task Scheduler jobs. Tests: `tests/test_windows_install.py`.
+  write CRLF on Windows; Task Scheduler jobs. Tests: a regression test.
 
 ## gt 0.19.1 — 2026-10-02
 
@@ -1988,7 +1978,7 @@ timestamp alert. Version directories copied from 0.18.1; gt-lotr 0.2.0 (new feat
 - **Recall benchmark.** `gt_bench.py recall --fixture DIR [--retriever keyword|FILE.py ...]`
   reports recall@1/3/10, files read and approximate tokens per question; a retriever that cannot
   load or raises is could-not-run, never zero. Baseline, keyword retriever (`gt_keyword_recall`,
-  the gt-query path) on the synthetic 36-question fixture `tests/fixtures/recall-bench`:
+  the gt-query path) on a synthetic 36-question fixture:
   **recall@1 0.972, recall@3 1.000, recall@10 1.000**, 123 files read, ~9,919 tokens
   (2026-10-02, self-verified). Optimistic by construction — the fixture's questions and pages
   were written together — so it compares retrievers; it does not predict a real vault.
@@ -2584,11 +2574,11 @@ Two failures were filed as load flakes during this release and were not:
   line that IS present reads as absent. On a real install that meant *"Vault upgrades: the check
   could not run (unrecognised output)"* -- the vault's pending upgrade silently skipped -- and
   `package.sh` occasionally claimed there was no gt version directory. Every such match is now a
-  here-string (`grep -q PATTERN <<<"$out"`), and `tests/test_no_sigpipe_grep_q.py` refuses the
+  here-string (`grep -q PATTERN <<<"$out"`), and a regression test refuses the
   pipe shape in any pipefail script of the newest releases.
 - **Backups stamped to the second.** `gt_upgrade`'s vault tarball (`vault-YYYYmmdd-HHMMSS`) and
   its `.base.` snapshots were named to the second, so two upgrades within one second replaced the
-  earlier backup. Names now count up (`-2`, `-3`, ...) instead (`test_upgrade_backup_names.py`).
+  earlier backup. Names now count up (`-2`, `-3`, ...) instead (a regression test).
 
 ### Known, and not fixed
 
@@ -2635,7 +2625,7 @@ Two failures were filed as load flakes during this release and were not:
 - **Checker `commit-msg` events are not run at commit time**: the commit guard reads file receipts
   only, and nothing calls `--event commit-msg` yet (a git `commit-msg` hook would). `selftest.sh`
   did not gain a cold-install checker step (editing it would need an installer bump); the same
-  assertion lives in `tests/test_gt_check.py`. No checkers ship — each is its own module request.
+  assertion lives in a regression test. No checkers ship — each is its own module request.
 - **A vault whose `tools/gt_events.py` predates 0.18.1 refuses to merge an `addon.fix` event**
   until `/gt:gt-upgrade` refreshes it. Proposals (`ext-proposals/*.json`) are written directly, not
   through the queue: they are JSON, not Markdown.
@@ -2671,7 +2661,7 @@ Two failures were filed as load flakes during this release and were not:
 - **gt's own repository has not adopted a release pipeline** (`dev/publish.sh` remains its release
   sequence). A `yes` project's `release.sh` is found through the absolute path in `source.md`, so a
   vault synced to another machine may report it missing there.
-- **The cached test install is used only by `test_gt_doctor_postinstall`**; tests whose subject is
+- **The cached test install is used only by the post-install doctor test**; tests whose subject is
   the install cannot use it. Rosetta is detected, not fixed. `prun.py --hosts` records no receipt.
 - **Script-side contradiction detection in the ingest pipeline is narrow** (same statement, a
   different figure or flipped polarity); anything subtler needs the `reconcile-<kind>` agent. A
@@ -2783,7 +2773,7 @@ ADR (same number, new title) is not counted. `--dry-run` now prints the whole no
 written, so the placement is visible.
 
 `gt_daily` now writes the note through the queue as one `replace-file` per run. The three
-`test_gt_daily` tests that pin the replace-never-append contract pass unchanged, byte-identical to
+The daily-note tests that pin the replace-never-append contract pass unchanged, byte-identical to
 their text in commit `22fb651` — the release gate for this change.
 
 ### New optional module: gt-lotr 0.1.0 (LOTR, also called gt MCP)
@@ -3629,7 +3619,7 @@ is what `always` means — but the advice attached to it must still be earned fr
   the one to watch"* at 13%, in the file the 0.1.1 fix had not reached. Found while
   disproving a bug report that was itself wrong.
 
-`tests/test_usage_module.py` now asks the question neither file was asked — change **only**
+A regression test now asks the question neither file was asked — change **only**
 the display level and the advice must not move — of every surface at every level, plus the
 inverse so the fix cannot degenerate into "never advise". Proven by mutation: each bug fails
 its own named test and nothing else.

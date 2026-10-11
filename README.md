@@ -21,6 +21,33 @@ and blocks it if the rule was broken.
 
 
 > [!IMPORTANT]
+## What it saves (measured, not claimed)
+
+![Golden Thread savings: without the Core rules a correct result costs 1.28x; LOTR keeps main-context tokens down by 50% or more](golden-thread-plugin/docs/gt-savings.png)
+
+Golden Thread costs tokens: the Core rules are re-sent on every prompt, and the hooks and agents
+add work. It also saves tokens in several ways. The `gt-usage` module keeps a **savings ledger** on
+your machine (from Claude Code's own usage records; nothing is sent anywhere) that puts each saving
+next to its cost. Every figure carries how it was established: *measured*, *estimated* (derived
+from measured inputs), or *design* (a claim no measurement backs yet, never counted in the net).
+
+| Mechanism | What it saves | Evidence |
+|---|---|---|
+| **Core rules** | Rework. Same coding tasks, rules on vs off, every failed run re-prompted until correct: without the rules a correct result cost **1.26×** (weighted by a real model mix), 34/45 runs were right first time vs 44/45 with them, and 7 of 15 replies pasted a live API key vs 0 of 15 | 90-run A/B benchmark on Opus, Sonnet and Haiku, 2026-10-11 (self-verified) |
+| **LOTR gateway** | Tool payloads kept out of the main conversation: 98% fewer main-context tokens over 25 Jira queries | One measured session (measured); details below |
+| **Agents keeping dumps out of context** | A subagent reads the large output and returns a summary; the main session never carries the raw text | Per agent run, from the transcripts (estimated) |
+| **Agent model tiers** | Routine agent work runs on a cheaper model than the session's. The row goes negative when an agent runs on a pricier model than its session, and the ledger shows that too | Per agent run, priced at list (estimated) |
+| **Cache-expiry guard** | Cuts a session before an idle prompt cache expires, instead of paying a full cache rebuild | Per cut (estimated) |
+| **Leaks, releases, persona work** | Secret rotations, release re-runs and role-specific rework the rules prevent | Design only, not yet benchmarked, kept out of the net |
+
+On the author's machine over one week the ledger showed the Core rules avoiding about 34 times
+their own token cost (estimated: the benchmark factor applied to measured usage). The graphic uses
+a 50% Opus model mix and shows LOTR at a conservative 50%.
+
+See your own figures with `/gt-usage:gt-usage-savings`. Tokens are the unit; dollars are list price.
+Set `savings_billing api` if your account is billed per token, and the report names them as spend
+avoided; on a subscription they are an equivalent, not a bill.
+
 ## One gateway for your MCP servers (LOTR)
 
 ![One tool connection, a fraction of the tokens: the same Jira query measured three ways, 98% fewer main-context tokens over 25 queries through LOTR with a specialized agent](golden-thread-plugin/docs/lotr-token-savings.png)

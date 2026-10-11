@@ -2348,7 +2348,7 @@ install (`gt_settings.py set`, `gt_sandbox.py`, `gt_model_policy.py`, `gt_doctor
 `post-install`, `vault_init.py fresh` / `install-core-rules`), whole-vault rewrites
 (`gt_upgrade.py run`, rename / merge / archive `--move` of a project), `gt_sync.py`, Core-rule
 files, the demo, watches. Every SKILL.md starts with its own route table, and
-`tests/test_skill_sandbox_routes.py` fails if a skill names a vault script with no route.
+a test fails if a skill names a vault script with no route.
 
 ### design.md and global-memory/ are yours (0.20.2)
 
