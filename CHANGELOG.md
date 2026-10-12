@@ -11,6 +11,29 @@ release's own summary line, kept short rather than reconstructed after the fact.
 
 ---
 
+## gt 0.21.2 — 2026-10-12
+
+- **An open session now compacts itself while its cache is warm.** The expiry guard could only make a
+  compacted copy of a session still open in a terminal, because nothing outside the running Claude Code
+  can change the conversation it holds. gt now ships a small Claude Code mod that runs inside the session
+  (Claude Code 2.1.267 or newer) and compacts it in place about 12 minutes before a 1-hour cache lapses,
+  saving the summary as a handoff. You come back to a small session with nothing to press.
+  `expiry_guard.open_sessions` gains `compact` (the new default) and `ask`, which puts `/compact` in the
+  prompt box so Enter does it (2.1.268 or newer).
+- **When a session cannot compact itself, `/clear` picks up where you left off.** With
+  `open_sessions fork`, or if the in-session compact could not run, the guard's compacted copy is now
+  saved as a handoff. When you come back after the cache lapsed, the first choice the guard offers is
+  `/clear`, and the fresh session in that same terminal is given the handoff, so it carries on instead of
+  starting from scratch. New setting `expiry_guard.handoff_pickup` (on by default).
+- **The gt pane needs Claude Code 2.1.296, and the installer checks.** On an older Claude Code, or
+  one whose version cannot be read, the pane question is not asked and the gt-pane module is not
+  installed (one an earlier install left is removed), with a line saying why. Your recorded choice
+  is kept, so re-running the installer after updating Claude Code puts the pane back. The minimum
+  was 2.1.287 in the docs, but the pane only works from 2.1.296.
+- **Release announcements read right for a flat list of changes.** An entry with no `###`
+  sub-headings now takes its title and list from each bullet's bold lead (the 0.21.1 title came
+  out "gt 0.21.1 — - gt-usage 0.1.9", naming one change of four).
+
 ## gt 0.21.1 — 2026-10-11
 
 - **gt-usage 0.1.9: the savings report is easier to read.** A TOTAL row sits under the columns (its
@@ -23,6 +46,12 @@ release's own summary line, kept short rather than reconstructed after the fact.
   failed and a `.req.*.tmp` file was left behind. On macOS that error is now retried for up to a
   second (never under gt sandbox mode, whose refusals must reach the inbox fallback at once, and
   never for a plain permission denial), and every drain removes queue temp files older than a day.
+- **A gt patch no longer re-cuts every module.** Modules couple to gt on the minor line: a module
+  cut at 0.21.0 keeps `requires_gt >=0.21.0,<0.22.0` through every 0.21.x, so gt 0.21.1 runs with
+  demo, farm, flow, watch and report-card still at 0.21.0 (owner, 2026-10-11).
+- **Recorded help no longer depends on which Python recorded it.** argparse names its heading
+  "optional arguments:" up to Python 3.9 and "options:" from 3.10; the help recorder now writes one
+  form.
 
 ## gt 0.21.0 — 2026-10-11
 

@@ -3,7 +3,7 @@
 > **Reader:** installing for the first time, or verifying a fork
 > **Claims last checked against the code:** 2026-10-04 (0.20.1) — see *The documents, and what belongs in each* in [`CLAUDE.md`](../CLAUDE.md).
 
-**Requirements:** Python 3.8+, Claude Code (any version; 2.1.136 or newer uses the plugin hook route, 2.1.287 or newer is needed for the gt pane).
+**Requirements:** Python 3.8+, Claude Code (any version; 2.1.136 or newer uses the plugin hook route, 2.1.296 or newer is needed for the gt pane; below it the pane is neither asked about nor installed).
 
 ---
 
@@ -102,7 +102,7 @@ tree you have, with each one's state and why; at the time of writing they are:
 | `flow` | `gt-flow` | on | `/gt-flow:gt-flow`, an offline HTML timeline of knowledge moving up the ladder |
 | `visualize` | `gt-visualize` | on | `/gt-visualize:gt-visualize`, a codebase in 3D — how-it-works walkthrough or code city (three.js inlined) |
 | `usage` | `gt-usage` | on | `/gt-usage:gt-usage`, the plan-allowance meter (5-hour, weekly and spend windows) |
-| `pane` | `gt-pane` | asked (0.21.0) | `/gt-pane:gt-pane` and `/gt-pane-buttons`: a 28-column pane of 12 plain-words buttons you can reorder, rename, add and remove (Claude Code 2.1.287 or newer) |
+| `pane` | `gt-pane` | asked (0.21.0) | `/gt-pane:gt-pane` and `/gt-pane-buttons`: a 28-column pane of 12 plain-words buttons you can reorder, rename, add and remove (Claude Code 2.1.296 or newer; below it the module is off and the question is not asked) |
 | `farm` | `gt-farm` | **off** | `/gt-farm:gt-farm`, work packets for an external AI service |
 | `lotr` | `gt-lotr` | **off** | `/gt-lotr:gt-lotr`, one MCP gateway in front of GitHub, Jira, Microsoft 365 and others |
 

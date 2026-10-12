@@ -1135,3 +1135,14 @@ entries pointing into `~/.claude/golden-thread/hooks/`). A new install **asks th
 first** (`install.sh --questions`); not at a terminal it exits 5 rather than take a security default
 silently, and `--accept-defaults` is the explicit opt-out.
 
+### 10.6 The expiry guard's in-session mod (0.21.2)
+
+gt ships one Claude Code mod of its own, `hooks/guard_mod.js`, loaded through `hooks.json`'s `modules`
+(Claude Code 2.1.267 and newer). It runs inside each interactive session and reaches only: `HOME`, files
+under `~/.claude/golden-thread/expiry-guard/`, the session's own `/compact`, the prompt box (to put
+`/compact` there in `ask` mode) and one notice line. No shell, network, process or model call of its own.
+It acts only on a plan the guard's idle hook wrote for that session, which happens only when
+`expiry_guard` is `auto` and `open_sessions` is `compact` or `ask`. The handoffs it and the guard save
+hold what the transcript held, so the folder is owner-only (0700), as Claude Code keeps its own
+transcripts. `open_sessions fork` or `notify`, or `expiry_guard off`, and the mod does nothing.
+

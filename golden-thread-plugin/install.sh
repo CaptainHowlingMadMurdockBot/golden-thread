@@ -554,11 +554,13 @@ def cmd_resolve(a):
                 why, m["reason"] = "invalid", got["reason"]
             elif str(got.get("reason", "")).startswith("POSIX-only"):   # 0.20.1: lotr on Windows
                 why, m["reason"] = "platform", got["reason"]
+            elif str(got.get("reason", "")).startswith("needs Claude Code"):   # 0.21.2: the pane
+                why, m["reason"] = "claude", got["reason"]
         elif got in ("on", "off"):
             state = got
         if m["admits"] is not True:
             state, why = "off", "requires"
-        elif why in ("invalid", "platform"):
+        elif why in ("invalid", "platform", "claude"):
             state = "off"
         m["state"], m["why"] = state, why
     atomic(out, mods)
@@ -590,6 +592,9 @@ def why_text(m, gtver=None):
             "requires": "skipped: needs gt %s%s" % (m["requires_gt"],
                                                     ", installing %s" % gtver if gtver else ""),
             "invalid": "skipped: %s" % m.get("reason", "invalid module.json"),
+            "platform": "skipped: %s" % m.get("reason", "POSIX-only"),
+            "claude": "skipped: %s" % m.get("reason", "needs a newer Claude Code")
+                      .replace(" -- skipped", ""),
             }[m["why"]]
 
 
@@ -617,6 +622,8 @@ def cmd_summary(a):
             s += " (invalid module.json)"
         elif m["why"] == "platform":
             s += " (POSIX-only: not on Windows)"
+        elif m["why"] == "claude":
+            s += " (%s)" % m.get("reason", "needs a newer Claude Code").replace(" -- skipped", "")
         elif m["why"] in ("flag", "recorded") and m["state"] != m["default"]:
             s += " (by your choice)"
         elif m["why"] == "default" and m["state"] == "off":
@@ -1573,6 +1580,8 @@ while [ "$i" -lt "$PLUGIN_COUNT" ]; do
       [ "$_why" = requires ] && SKIP_NOTES="${SKIP_NOTES}Skipping module $_m (${PLUGIN_NAMES[$i]} ${PLUGIN_VERS[$i]}): its requires_gt does not admit gt $VERSION — treated as off for this run, your recorded choice unchanged
 "
       [ "$_why" = platform ] && SKIP_NOTES="${SKIP_NOTES}Skipping module $_m: it is POSIX-only (a Unix-domain-socket gateway) and does not run on Windows — your recorded choice unchanged
+"
+      [ "$_why" = claude ] && SKIP_NOTES="${SKIP_NOTES}Skipping module $_m: it $(python3 "$SRC/scripts/gt_components.py" module-cc-gap "$_m" 2>/dev/null || echo 'needs a newer Claude Code') — your recorded choice unchanged; update Claude Code, then re-run the installer to add it
 "
     fi
   done < "$GT_TMP/states.tsv"

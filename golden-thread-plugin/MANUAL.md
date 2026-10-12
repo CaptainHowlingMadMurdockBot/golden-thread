@@ -4767,10 +4767,19 @@ runs even with `model_calibration` off; the budget, weekly-allowance and termina
 - **Findings.** `findings_calibration` also grades findings: no label above `unverified` without
   evidence, observed symptom split from inferred mechanism, re-labelled only on your yes.
 - **The cache-expiry guard (#27).** `expiry_guard` (`auto`, `warn-only`, `off`) with `expiry_guard.*`
-  (`closed_sessions`, `open_sessions`, `resume_backstop`, `min_tokens` 150K, `margin_min`, `notify`).
+  (`closed_sessions`, `open_sessions`, `handoff_pickup`, `resume_backstop`, `min_tokens` 150K,
+  `margin_min`, `notify`).
   The setting ships `warn-only`; **the `calibrated` token profile sets it to `auto`**, which compacts an
   idle closed session while its prompt cache is warm, or makes a compacted `--fork-session` copy of an
   open one.
+- **Open sessions compact in place (0.21.2).** A separate process cannot compact a session that is still
+  open, so gt ships a Claude Code mod (`hooks/guard_mod.js`, Claude Code 2.1.267 or newer) that runs inside
+  it. With `open_sessions compact` (the new default) the session compacts itself about 12 minutes before a
+  1-hour cache lapses, saves the summary as a handoff, and says so; `ask` instead puts `/compact` in the
+  prompt box so Enter does it (2.1.268 or newer). With `open_sessions fork`, or when the mod cannot act,
+  the guard makes the forked copy as before, saves its summary as a handoff, and when you come back the first
+  choice is `/clear`: the fresh session in that terminal loads the handoff (`handoff_pickup`, on by
+  default). Handoffs live owner-only in `~/.claude/golden-thread/expiry-guard/`.
 
 ### Persona-aligned output (#19, #45)
 
@@ -4841,12 +4850,15 @@ modes, hooks, skip-permissions or `GT_TEST_GATE`, and every Core-rule gate is un
 
 ### The gt pane (#41) and getting started (#36)
 
-The optional module **gt-pane 0.1.0** (Claude Code 2.1.287 or newer; install with `--with pane`) shows a
+The optional module **gt-pane 0.1.0** (Claude Code 2.1.296 or newer since gt 0.21.2; install with `--with pane`) shows a
 28-column pane of 12 bordered buttons (hotkeys 1-9, 0, q, w) that send plain-words prompts as your own
 words. `/gt-pane-buttons` toggles it; a small x closes it; **Arrange** mode reorders; `/gt-pane:gt-pane` edits the list
 in plain words ("move Overdue to the top"). Your list is `~/.claude/golden-thread/pane/buttons.json`,
 seeded once from your persona and never overwritten. Narrow terminals get a button row above the prompt;
 an allowance footer reads gt-usage (`pane_status`). `pane_at_start` is `open`, `closed` or `off`.
+On an older Claude Code, or one whose version cannot be read, the installer neither asks about the pane nor
+installs it, and removes one an earlier install left; your recorded choice is kept, so re-running the
+installer after updating Claude Code puts the pane back.
 `/gt:gt-help` opens a **Getting started** tab for your role; the last install question ("Open the guide?")
 opens it.
 
@@ -4911,7 +4923,8 @@ Every other setting the registry gained since the last manual, so `gt_settings.p
 | Setting | Default | Values | What it does |
 |---|---|---|---|
 | `expiry_guard.closed_sessions` | compact | compact, notify, off | What auto does to an idle session no terminal has open (acts only when expiry_guard is auto). |
-| `expiry_guard.open_sessions` | fork | fork, notify, off | What auto does to an idle session still open in a terminal (acts only when expiry_guard is auto). |
+| `expiry_guard.open_sessions` | compact | compact, ask, fork, notify, off | What auto does to an idle session still open in a terminal (acts only when expiry_guard is auto). |
+| `expiry_guard.handoff_pickup` | on | on, off | After a fork, offer /clear to continue from the saved handoff, and load it. |
 | `expiry_guard.resume_backstop` | on | on, off | Block the first prompt of a large, expired session once, with the cost and three choices. |
 | `expiry_guard.min_tokens` | 150000 |  | Contexts smaller than this are left alone by the cache-expiry guard (default 150000). |
 | `expiry_guard.margin_min` | auto |  | How many minutes before the cache lapses the guard fires (auto: 5 for a 5-minute cache, 10 for a 1-hour cache). |
