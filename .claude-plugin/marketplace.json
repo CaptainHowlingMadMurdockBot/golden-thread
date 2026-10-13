@@ -1,0 +1,84 @@
+{
+  "name": "golden-thread-plugin",
+  "owner": {
+    "name": "Stacy Haven",
+    "email": "shaven@shavenconsulting.com"
+  },
+  "metadata": {
+    "description": "Golden Thread: vault-based AI memory with an enforced Core-rule tier, plus its optional modules. Install gt-all for everything, or gt alone."
+  },
+  "plugins": [
+    {
+      "name": "gt",
+      "source": "./golden-thread-plugin/golden-thread/0.21.3",
+      "description": "Golden Thread: vault-based AI memory system with an enforced Core-rule tier. Turns an Obsidian vault into the single source of truth for all Claude Code sessions, and installs hooks that re-assert and validate the rules that must never drift.",
+      "version": "0.21.3"
+    },
+    {
+      "name": "gt-all",
+      "source": "./golden-thread-plugin/bundles/gt-all",
+      "description": "Golden Thread, everything in one step: installs gt and its modules (demo, flow, pane, report-card, usage, visualize, watch, wiki) as dependencies. Then run /gt:gt-setup. LOTR and farm are opt-in, not in this bundle.",
+      "version": "0.21.3"
+    },
+    {
+      "name": "gt-demo",
+      "source": "./golden-thread-plugin/golden-thread-demo/0.21.0",
+      "description": "Golden Thread demo: a live, self-running guided tour of PizzaBot 3000 in its own throwaway vault. Build, tour, inspect and rebuild the demo without touching the real vault.",
+      "version": "0.21.0"
+    },
+    {
+      "name": "gt-farm",
+      "source": "./golden-thread-plugin/golden-thread-farm/0.21.0",
+      "description": "Golden Thread farm: hand bulk, mechanical or second-opinion work to an external AI service as a self-contained work packet with a strict return contract, gated so nothing private leaves the session.",
+      "version": "0.21.0"
+    },
+    {
+      "name": "gt-flow",
+      "source": "./golden-thread-plugin/golden-thread-flow/0.21.0",
+      "description": "Golden Thread Flow: draw knowledge moving up the ladder over time -- session, memory, research and decisions, Knowledge, global-memory, Core -- as one self-contained, offline HTML page, with a --redact mode for anything shared.",
+      "version": "0.21.0"
+    },
+    {
+      "name": "gt-lotr",
+      "source": "./golden-thread-plugin/golden-thread-lotr/0.4.1",
+      "description": "Golden Thread LOTR: one gateway to rule them all. A small, fixed MCP surface (find, call_read, call_write, call_consent) in front of any number of downstream connections -- GitHub, Jira, Microsoft Graph and other REST APIs -- with a registry that says who talks to whom, as whom, and from which machine.",
+      "version": "0.4.1"
+    },
+    {
+      "name": "gt-pane",
+      "source": "./golden-thread-plugin/golden-thread-pane/0.1.1",
+      "description": "Golden Thread pane: twelve plain-words buttons in a side pane (Claude Code mods, 2.1.287 or later). Press one and it sends its prompt as if you had typed it. The list is yours to reorder, rename, add to and remove from.",
+      "version": "0.1.1"
+    },
+    {
+      "name": "gt-report-card",
+      "source": "./golden-thread-plugin/golden-thread-report-card/0.21.0",
+      "description": "Golden Thread Report Card: a session report card computed at /compact and session end and delivered at the next session start, with the close-out question for projects that look finished.",
+      "version": "0.21.0"
+    },
+    {
+      "name": "gt-usage",
+      "source": "./golden-thread-plugin/golden-thread-usage/0.1.9",
+      "description": "Golden Thread Usage: a quiet meter for the plan allowance. Records the 5-hour, weekly and monthly-spend windows from every render, says nothing until one of them is worth acting on, and can say what a cut would save right now.",
+      "version": "0.1.9"
+    },
+    {
+      "name": "gt-visualize",
+      "source": "./golden-thread-plugin/golden-thread-visualize/0.4.6",
+      "description": "Golden Thread Visualize: draw a repository as an interactive 3D code city -- directories as districts, files as buildings, height by lines, colour by language or churn -- as one self-contained, offline HTML page (three.js inlined), with a --redact mode for anything shared.",
+      "version": "0.4.6"
+    },
+    {
+      "name": "gt-watch",
+      "source": "./golden-thread-plugin/golden-thread-watch/0.21.0",
+      "description": "Golden Thread Watch: follow any git repo you depend on, classify its changes by fixed rules, and raise a P0 at session start when it ships a security fix.",
+      "version": "0.21.0"
+    },
+    {
+      "name": "gt-wiki",
+      "source": "./golden-thread-plugin/golden-thread-wiki/0.2.9",
+      "description": "Golden Thread Wiki: LLM-powered knowledge base with immutable sources, interlinked pages, and a maintenance loop. Ingest, query, lint, and refresh a structured wiki vault.",
+      "version": "0.2.9"
+    }
+  ]
+}

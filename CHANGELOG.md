@@ -11,6 +11,75 @@ release's own summary line, kept short rather than reconstructed after the fact.
 
 ---
 
+## gt 0.21.3 — 2026-10-13
+
+Install from the Claude prompt in one step, and an expiry guard that saves your work before it compacts.
+
+- **The expiry guard captures before it cuts: findings to the vault, then a handoff, then the compaction.**
+  When an idle session's timer fires, gt first sends one turn while the cache is still warm (mostly
+  cache reads): it queues anything not yet in the vault to the open project's research.md or
+  decisions.md through the write queue, and writes a handoff of at most 40 lines that ends with a
+  pointer to the project's memory index and source.md (read when needed, never preloaded). When that
+  turn ends the session is compacted and the handoff is kept in full. New setting
+  `expiry_guard.capture_first` (on by default; `off` cuts at once as before). A capture turn that has
+  not ended in 10 minutes is given up without a cut.
+- **Fixed: the guard's in-session mod never loaded.** Claude Code's module loader refuses a `$` noun
+  read as a value and an `$.env.get` with a variable name; gt's mod had both, so in every session the
+  mod silently did not load and the guard could only fork a copy. A new test runs Claude Code's own
+  `claude plugin validate` on every plugin the tree ships, which reports exactly that.
+- **Fixed: an idle session could be missed entirely.** The guard armed only on Claude Code's one-shot
+  idle notification, which never comes if you touch the terminal in the minute after a reply. It now
+  also arms from the Stop hook at the end of every turn, and logs `arm-skipped` with the reason when it
+  does not arm. The in-session mod has its own fallback timer for when no hook arms at all.
+- **Fixed: a session could be paired with another session's turn.** Pairing was by folder and time, so
+  two sessions in the same folder could swap plans; one session's in-place compact went to a session
+  that had ended. The mod now records its session id (`$.session.id`, Claude Code 2.1.296) and the
+  guard pairs by it, waiting briefly at the end of a turn for the mod's record.
+- **Fixed: the cost of a lost session was priced at the wrong model.** The rebuild estimate used the
+  model of the last reply, so a Haiku skill turn priced a 295K-token Opus session at $0.06 instead of
+  about $2.36. It now uses the session's main model. When the cache has already lapsed, a compaction
+  runs on the smallest model whose context window fits and moves up on failure, and the backstop
+  offers that cheaper sequence; the ledger now records what a lapse cost and what a warm cut would
+  have saved.
+- **gt pane 0.1.1: Update Actions.** A control below Arrange opens the button editor
+  (`/gt-pane:gt-pane`) directly, to rename a button or change the words it sends.
+
+- **Install Golden Thread without leaving Claude Code.** The only route was `bash install.sh` in a
+  terminal, and installing the plugins one at a time from the prompt (which an owner reported as a
+  bad experience) did not work at all: the repository had no marketplace file, so
+  `/plugin marketplace add` found nothing. Now:
+  `/plugin marketplace add shaven/golden-thread`, then `/plugin install gt-all@golden-thread-plugin`
+  (gt and every module in one step; `gt@golden-thread-plugin` alone is the minimal install). The
+  marketplace file is generated from the version directories (`dev/plugins.py marketplace`, with a
+  `marketplace-check` the test suite runs), so it cannot drift from what ships.
+- **`gt-all`: one install for everything.** A bundle plugin whose dependencies are gt and every module
+  that is on by default plus the pane (wiki, flow, usage, visualize, report-card, watch, demo, pane).
+  `lotr` and `farm` stay opt-in. Claude Code installs the dependencies itself; nothing to pick.
+- **gt says when the machine-level setup is missing, and `/gt:gt-setup` does it in the prompt.**
+  Claude Code installs plugins but cannot wire hooks, choose a security level or create a vault.
+  The first session after a prompt-route install now shows one line (`gt: Golden Thread is installed
+  but not set up on this machine ... Run /gt:gt-setup`), from a hook that works before anything is
+  wired and costs one file test afterwards. The new skill asks, with the question screens: install
+  everything (recommended) / choose modules / core only, then the security questions
+  (the same words as `install.sh --questions`), then the vault, shows one review screen, and runs
+  the installer with exactly those answers. Choosing everything needs no further per-plugin action.
+  Skill count 41 to 42.
+- **`install.sh` asks the module question once, and has a flag for it.** A new install at a terminal
+  that gave no `--with`/`--without` is asked "Everything (recommended) / Let me choose / Core only"
+  instead of leaving the modules to defaults. `--all-modules` and `--core-only` are the one-flag
+  answers (remembered like `--with`/`--without`; both together are refused).
+- **One marketplace named `golden-thread-plugin`, whoever created it.** When Claude Code manages that
+  marketplace (a GitHub clone, or a path added with `/plugin marketplace add`), the installer no
+  longer overwrites it with its own directory marketplace or writes into the clone; it installs the
+  machine-level parts and leaves the marketplace and its source as they are. Adding the GitHub
+  marketplace after a terminal install simply re-points it (Claude Code says so); no second
+  marketplace, no second copy of a plugin, no conflicting `enabledPlugins` keys. If a module is
+  turned off while `gt-all` is installed, `gt-all` itself is removed, because a dependent would
+  switch the module straight back on.
+- **Known, not fixed:** the real GitHub `marketplace add` against the public repository is untested
+  until the marketplace file is published; it was proved against a local checkout path, which
+  Claude Code treats the same way for the marketplace file and the plugin sources.
+
 ## gt 0.21.2 — 2026-10-12
 
 - **An open session now compacts itself while its cache is warm.** The expiry guard could only make a

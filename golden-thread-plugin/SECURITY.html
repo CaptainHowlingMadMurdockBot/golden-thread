@@ -1494,11 +1494,13 @@ first</strong> (<code>install.sh --questions</code>); not at a terminal it exits
 silently, and <code>--accept-defaults</code> is the explicit opt-out.</p>
 <h3 id="106-the-expiry-guards-in-session-mod-0212">10.6 The expiry guard's in-session mod (0.21.2)</h3>
 <p>gt ships one Claude Code mod of its own, <code>hooks/guard_mod.js</code>, loaded through <code>hooks.json</code>'s <code>modules</code>
-(Claude Code 2.1.267 and newer). It runs inside each interactive session and reaches only: <code>HOME</code>, files
-under <code>~/.claude/golden-thread/expiry-guard/</code>, the session's own <code>/compact</code>, the prompt box (to put
+(Claude Code 2.1.267 and newer). It runs inside each interactive session and reaches only: <code>HOME</code> and the cache-lifetime
+variable <code>CLAUDE_CODE_PROMPT_CACHE_TTL</code>, files under <code>~/.claude/golden-thread/expiry-guard/</code>, one read of
+<code>~/.claude/vault-config.json</code>, the session's own context size and <code>/compact</code>, the prompt box (to put
 <code>/compact</code> there in <code>ask</code> mode) and one notice line. No shell, network, process or model call of its own.
-It acts only on a plan the guard's idle hook wrote for that session, which happens only when
-<code>expiry_guard</code> is <code>auto</code> and <code>open_sessions</code> is <code>compact</code> or <code>ask</code>. The handoffs it and the guard save
+It acts on a plan the guard's Stop or idle hook wrote for that session, or, if neither hook ever did, on a
+plan it makes itself from the same settings at its last poll; either way only when <code>expiry_guard</code> is <code>auto</code>
+and <code>open_sessions</code> is <code>compact</code> or <code>ask</code>. The handoffs it and the guard save
 hold what the transcript held, so the folder is owner-only (0700), as Claude Code keeps its own
 transcripts. <code>open_sessions fork</code> or <code>notify</code>, or <code>expiry_guard off</code>, and the mod does nothing.</p>
 </body>

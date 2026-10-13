@@ -54,6 +54,10 @@ while read -r plugin version name; do
   LABEL="${LABEL:+$LABEL, }$name $version"
 done <<< "$PLUGINS"
 
+# The gt-all bundle (0.22.0): install.sh --all-modules reads which modules "everything" means
+# from bundles/gt-all, so a zip install carries it too.
+[ -d bundles ] && cp -R bundles "$STAGE/$DIST/"
+
 # MANIFEST.json is deliberately NOT shipped: install.sh regenerates it against the
 # files it actually lays down, so a stale manifest in the zip would make the very
 # first component check report drift that does not exist.

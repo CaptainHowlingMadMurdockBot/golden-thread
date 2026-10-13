@@ -644,6 +644,70 @@ def cmd_onfiles(a):
     return 0
 
 
+def cmd_bundle(a):
+    """bundle <root> everything|all -> one module NAME per line. `everything` is the gt-all
+    bundle's dependencies (bundles/gt-all/.claude-plugin/plugin.json, mapped plugin -> module
+    name); `all` is every module this tree ships. Newest release of each directory."""
+    root, which = a[0], a[1]
+    bymplug, byname_default = {}, {}
+    for d in sorted(os.listdir(root)):
+        dd = os.path.join(root, d)
+        if not d.startswith("golden-thread-") or not os.path.isdir(dd):
+            continue
+        vers = [v for v in os.listdir(dd) if re.fullmatch(r"\d+\.\d+\.\d+", v)
+                and os.path.isfile(os.path.join(dd, v, "module.json"))]
+        if not vers:
+            continue
+        v = max(vers, key=lambda x: tuple(int(n) for n in x.split(".")))
+        try:
+            m = load(os.path.join(dd, v, "module.json"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(m, dict) and NAME.match(str(m.get("name", ""))):
+            bymplug[m.get("plugin")] = m["name"]
+            byname_default[m["name"]] = m.get("default")
+    if which == "all":
+        names = sorted(bymplug.values())
+    else:
+        try:
+            deps = load(os.path.join(root, "bundles", "gt-all", ".claude-plugin",
+                                     "plugin.json")).get("dependencies") or []
+        except (OSError, ValueError, AttributeError):
+            deps = []
+        names = sorted(bymplug[x] for x in deps if x in bymplug)
+        if not names:
+            # no bundle file in this tree (an old zip): the same rule dev/plugins.py applies --
+            # every module on by default, plus the pane
+            names = sorted(n for n, dflt in byname_default.items() if dflt == "on" or n == "pane")
+    for n in names:
+        print(n)
+    return 0
+
+
+def cmd_external_market(a):
+    """external-market <known_marketplaces.json> <name> <our-dir> <script-dir> -> prints
+    `external` when a marketplace of this name that Claude Code manages (a GitHub clone, a git
+    URL, or a directory other than ours) is registered, or when this installer runs from inside
+    the marketplaces folder; else `local`. The local one is the directory marketplace this
+    installer writes itself (the terminal route)."""
+    known, name, ours, here = a
+    real = os.path.realpath
+    try:
+        ent = load(known).get(name) or {}
+    except (OSError, ValueError, AttributeError):
+        ent = {}
+    src = ent.get("source") or {}
+    loc = ent.get("installLocation") or src.get("path") or ""
+    inside = real(here).startswith(real(os.path.dirname(ours)) + os.sep)
+    if inside:
+        print("external")
+    elif ent and (src.get("source") not in (None, "directory") or (loc and real(loc) != real(ours))):
+        print("external")
+    else:
+        print("local")
+    return 0
+
+
 def cmd_names(a):
     print(", ".join(m["name"] for m in load(a[0])))
     return 0
@@ -868,6 +932,7 @@ def cmd_restore_cron(a):
 
 CMDS = {"scan": cmd_scan, "resolve": cmd_resolve, "record": cmd_record, "list": cmd_list,
         "summary": cmd_summary, "onfiles": cmd_onfiles, "names": cmd_names,
+        "bundle": cmd_bundle, "external-market": cmd_external_market,
         "remove": cmd_remove, "pick": cmd_pick, "restore-cron": cmd_restore_cron,
         "moved": cmd_moved, "moved-annotate": cmd_moved_annotate,
         "newer-owned": cmd_newer_owned}
@@ -935,6 +1000,8 @@ REPLY_LENGTH=""          # --reply-length normal|brief|terse (0.21.0, item #39)
 OPEN_GUIDE=""            # --open-guide yes|no: open the Getting started page at the end (item #36)
 STATUSLINE=""            # --statusline yes|no
 AST_GREP=""              # --ast-grep yes|no
+ALL_MODULES=no           # --all-modules (0.22.0): every module the gt-all bundle names, in one flag
+CORE_ONLY=no             # --core-only (0.22.0): gt alone, every module off
 ANSWERS_FILE=""          # --answers FILE: the JSON that `--questions --json` described, filled in
 ACCEPT_DEFAULTS=no       # --accept-defaults: the explicit opt-out of the exit-5 stop (CI)
 QUESTIONS=no             # --questions: print every install question, install nothing
@@ -955,6 +1022,8 @@ while [ $# -gt 0 ]; do
       MODULE_FLAGS+=("${1#--}:$2"); shift 2 ;;
     --with=*)    MODULE_FLAGS+=("with:${1#--with=}"); shift ;;
     --without=*) MODULE_FLAGS+=("without:${1#--without=}"); shift ;;
+    --all-modules) ALL_MODULES=yes; shift ;;
+    --core-only)   CORE_ONLY=yes; shift ;;
     --vault)    VAULT_ARG="${2:-}"; shift 2 || true ;;
     --vault=*)  VAULT_ARG="${1#--vault=}"; shift ;;
     --no-vault) NO_VAULT=yes; shift ;;
@@ -1032,6 +1101,11 @@ install.sh — install the Golden Thread Claude Code plugins (gt and every plugi
   ./install.sh --with NAME            install module NAME (repeatable); remembered
   ./install.sh --without NAME         remove module NAME and keep it off (repeatable);
                                       remembered in ~/.claude/golden-thread/install-choices.json
+  ./install.sh --all-modules          install gt and EVERY module the gt-all bundle names (wiki, flow,
+                                      usage, visualize, report-card, watch, demo, pane); remembered.
+                                      At a terminal, a new install asks this first: everything /
+                                      let me choose / core only
+  ./install.sh --core-only            install gt alone and keep every module off; remembered
   ./install.sh --list-modules         print each module, its state and why, install nothing
   ./install.sh --model-profile P      the model and effort each skill runs at: average (a new
                                       install's default), very-high, or inherit; remembered
@@ -1327,6 +1401,18 @@ SETTINGS="$HOME/.claude/settings.json"
 INSTALLED="$HOME/.claude/plugins/installed_plugins.json"
 KNOWN="$HOME/.claude/plugins/known_marketplaces.json"
 
+# Who owns the marketplace named golden-thread-plugin (0.22.0). Terminal route: this installer
+# writes it, a directory marketplace with one entry per installed plugin (MARKET_MODE=local).
+# Prompt route: the person ran `/plugin marketplace add shaven/golden-thread` (or a path), so
+# Claude Code owns it -- a GitHub clone inside ~/.claude/plugins/marketplaces/ that this installer
+# may even be running FROM. Writing our directory marketplace over it would replace the source
+# they chose and scribble into a git clone, so there the installer touches only what is
+# machine-level: the plugin cache, the registrations, settings, hooks, scripts, the vault
+# (MARKET_MODE=external). Either way there is ONE marketplace of this name.
+MARKET_MODE=$(modpy external-market "$KNOWN" "$MARKET_NAME" "$MARKETPLACE" "$SCRIPT_DIR" 2>/dev/null) || MARKET_MODE=local
+[ "$MARKET_MODE" = external ] || MARKET_MODE=local
+export GT_MARKET_MODE="$MARKET_MODE"
+
 # ── The install questions (0.21.0, item #33) ──────────────────────────────────────────────────
 # --questions prints them and installs nothing. Otherwise every answer is resolved NOW, before
 # any file is written: flags, --answers FILE, the terminal, the current values, the defaults. Not
@@ -1343,6 +1429,47 @@ if [ "$QUESTIONS" = yes ]; then
   python3 -B "$GT_QUESTIONS" "${_gt_qa[@]}" || _gt_rc=$?
   exit "$_gt_rc"
 fi
+# ── Modules in one question (0.22.0) ───────────────────────────────────────────────────────────
+# Before 0.22.0 a person had to turn modules on one at a time (--with NAME, or one /plugin install
+# per module). --all-modules / --core-only are the one-flag answers, and a NEW install at a
+# terminal that gave no module flag is asked once. An answer here is only ever the same
+# --with/--without flags a person could have typed, so the choice is remembered like theirs.
+if [ "$ALL_MODULES" = yes ] && [ "$CORE_ONLY" = yes ]; then
+  echo "✗ --all-modules and --core-only contradict each other; give one"; exit 1
+fi
+if [ "$ALL_MODULES" = no ] && [ "$CORE_ONLY" = no ] && [ "${#MODULE_FLAGS[@]}" -eq 0 ] \
+   && [ "$ACCEPT_DEFAULTS" = no ] && [ "$LIST_MODULES" != yes ] && [ "$QUESTIONS" != yes ] \
+   && [ -t 0 ] && [ -t 1 ] \
+   && [ ! -f "$HOME/.claude/golden-thread/install-choices.json" ] \
+   && [ ! -d "$HOME/.claude/golden-thread/wired" ]; then
+  _gt_every=$(modpy bundle "$SCRIPT_DIR" everything 2>/dev/null | tr '\n' ' ' | sed 's/ *$//; s/ /, /g')
+  if [ -n "$_gt_every" ]; then
+    question_break
+    echo "Which Golden Thread modules do you want?"
+    echo "  1) Everything (recommended): $_gt_every"
+    echo "  2) Let me choose: the default set, and I will ask about the rest"
+    echo "  3) Core only: gt on its own; add a module later with --with NAME"
+    printf 'Choose 1, 2 or 3 [1]: '
+    read -r _gt_mans </dev/tty || _gt_mans=""
+    case "$_gt_mans" in
+      ""|1|e|E|everything|Everything) ALL_MODULES=yes ;;
+      3|c|C|core|Core) CORE_ONLY=yes ;;
+      *) ;;
+    esac
+  fi
+fi
+if [ "$ALL_MODULES" = yes ]; then
+  while IFS= read -r _gt_m; do
+    [ -n "$_gt_m" ] || continue
+    case " ${MODULE_FLAGS[*]:-} " in *" with:$_gt_m "*|*" without:$_gt_m "*) ;; *) MODULE_FLAGS+=("with:$_gt_m") ;; esac
+  done < <(modpy bundle "$SCRIPT_DIR" everything)
+elif [ "$CORE_ONLY" = yes ]; then
+  while IFS= read -r _gt_m; do
+    [ -n "$_gt_m" ] || continue
+    case " ${MODULE_FLAGS[*]:-} " in *" with:$_gt_m "*|*" without:$_gt_m "*) ;; *) MODULE_FLAGS+=("without:$_gt_m") ;; esac
+  done < <(modpy bundle "$SCRIPT_DIR" all)
+fi
+
 PLAN_SUMMARY=""
 PLAN_REVIEW=""
 # --list-modules asks nothing and installs nothing, so it needs no answers
@@ -1954,7 +2081,9 @@ done
 # (JSON files and hook files backed up first; each removal printed). Its hook entries in
 # settings.json are removed with the hook registrations in step 6. Only
 # <plugin>@golden-thread-plugin keys are touched; nothing of anyone else's.
-modpy remove "$MODJSON" "$HOME" "$SRC" "$CACHE_ROOT" "$MARKETPLACE" "$INSTALLED" "$SETTINGS" \
+modpy remove "$MODJSON" "$HOME" "$SRC" "$CACHE_ROOT" \
+  "$( [ "$MARKET_MODE" = external ] && echo "$GT_TMP/no-local-marketplace" || echo "$MARKETPLACE" )" \
+  "$INSTALLED" "$SETTINGS" \
   "$HOME/.claude/golden-thread/hooks"
 
 # File modes are SET, never inherited (0.15.0, R1). `cp` gives a new file the source's mode
@@ -2339,6 +2468,9 @@ fi
 # Each entry's description is read from that plugin's own plugin.json. Until 0.14.0
 # marketplace.json carried hand-typed descriptions for gt and gt-wiki, which had already
 # drifted from the manifests -- and a third plugin would have had no entry at all.
+if [ "$MARKET_MODE" = external ]; then
+  echo "Marketplace $MARKET_NAME is managed by Claude Code (/plugin marketplace add): left as it is"
+else
 mkdir -p "$MARKETPLACE/.claude-plugin"
 MARKET_ARGS=()
 i=0
@@ -2367,6 +2499,7 @@ EOF
 # dirs below (an upgrade kept a 0600 copy where a fresh install wrote 0644).
 set_modes "$MARKETPLACE/.claude-plugin"
 chmod 755 "$MARKETPLACE" "$MARKETPLACE/plugins" 2>/dev/null || true
+fi
 
 # The plugin manifests are copied from source, not regenerated here. Two
 # hand-maintained copies of the same manifest drift - the descriptions had
@@ -2378,7 +2511,7 @@ chmod 755 "$MARKETPLACE" "$MARKETPLACE/plugins" 2>/dev/null || true
 # plugin from the marketplace (rather than from the installed cache) finds zero
 # skills, and no /gt: commands appear.
 i=0
-while [ "$i" -lt "$PLUGIN_COUNT" ]; do
+while [ "$MARKET_MODE" = local ] && [ "$i" -lt "$PLUGIN_COUNT" ]; do
   p_src=$(plugin_src "$i"); p_market="$MARKETPLACE/plugins/${PLUGIN_NAMES[$i]}"
   cp "$p_src/.claude-plugin/plugin.json" "$p_market/.claude-plugin/plugin.json"
   for dir in skills scripts templates commands hooks demo packs agents workflows help; do
@@ -2392,8 +2525,8 @@ while [ "$i" -lt "$PLUGIN_COUNT" ]; do
   set_modes "$p_market"
   i=$((i + 1))
 done
-strip_gt_demo "$MARKETPLACE/plugins/gt"
-echo "Populated marketplace plugin directories with skills/scripts/templates"
+[ "$MARKET_MODE" = local ] && strip_gt_demo "$MARKETPLACE/plugins/gt"
+[ "$MARKET_MODE" = local ] && echo "Populated marketplace plugin directories with skills/scripts/templates"
 
 # 2c. macOS (0.20.1, M9): when the python3 on PATH failed the write probe, the gt-vault MCP --
 # started by Claude Code with that bare `python3` -- could not write the vault either. Its
@@ -2440,7 +2573,7 @@ case "$(uname -s 2>/dev/null)" in
     ;;
 esac
 
-echo "Created marketplace entries → $MARKETPLACE"
+[ "$MARKET_MODE" = local ] && echo "Created marketplace entries → $MARKETPLACE"
 
 # 3-5. Register in known_marketplaces.json, installed_plugins.json and
 # settings.json (enabledPlugins).
@@ -2501,14 +2634,17 @@ def save(path, d):
         os.fsync(fh.fileno())
     os.replace(tmp, path)
 
-d = load(known, {})
-d["golden-thread-plugin"] = {
-    "source": {"source": "directory", "path": marketplace},
-    "installLocation": marketplace,
-    "lastUpdated": "2026-08-15T00:00:00.000Z",
-}
-save(known, d)
-print("Registered in known_marketplaces.json")
+if os.environ.get("GT_MARKET_MODE") == "external":
+    print("known_marketplaces.json: %s is Claude Code's own entry, left as it is" % market_name)
+else:
+    d = load(known, {})
+    d["golden-thread-plugin"] = {
+        "source": {"source": "directory", "path": marketplace},
+        "installLocation": marketplace,
+        "lastUpdated": "2026-08-15T00:00:00.000Z",
+    }
+    save(known, d)
+    print("Registered in known_marketplaces.json")
 
 d = load(installed, {"version": 2, "plugins": {}})
 now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -2517,6 +2653,36 @@ for key, path, ver in PLUGINS:
         "scope": "user", "installPath": path, "version": ver,
         "installedAt": now, "lastUpdated": now, "gitCommitSha": "local",
     }]
+# The gt-all bundle (0.22.0): `/plugin install gt-all` installs it, with every module as a
+# dependency, and a dependent forces its dependencies on -- so it would undo --without NAME.
+# It stays only while the Claude-managed marketplace can load it AND every plugin it names is
+# among the plugins being installed; otherwise it goes (entry, enabled flag, cache copy), and
+# the person's modules are whatever they chose. Nothing else about it is touched.
+bundle_key = "gt-all@" + market_name
+drop_bundle = False
+if bundle_key in d.get("plugins", {}):
+    keep = False
+    if os.environ.get("GT_MARKET_MODE") == "external":
+        try:
+            root = os.path.dirname(os.path.dirname(os.path.abspath(src)))     # the plugin root
+            pj = os.path.join(root, "bundles", "gt-all", ".claude-plugin", "plugin.json")
+            deps = json.load(open(pj, encoding="utf-8")).get("dependencies") or []
+            have = {k.split("@")[0] for k, _p, _v in PLUGINS}
+            keep = all(x in have for x in deps)
+        except (OSError, ValueError, AttributeError):
+            keep = False
+    if not keep:
+        gone = d["plugins"].pop(bundle_key)
+        import shutil
+        for e in gone if isinstance(gone, list) else []:
+            ip = e.get("installPath") if isinstance(e, dict) else None
+            if ip and os.path.basename(os.path.dirname(ip)) == "gt-all" \
+                    and os.path.basename(os.path.dirname(os.path.dirname(ip))) == market_name:
+                shutil.rmtree(os.path.dirname(ip), ignore_errors=True)
+        print("Removed the gt-all bundle registration (%s)"
+              % ("not every module it names is installed" if os.environ.get("GT_MARKET_MODE") == "external"
+                 else "this marketplace does not carry it"))
+        drop_bundle = True
 order_plugin_keys(d.get("plugins"), ORDER, market_name)
 save(installed, d)
 print("Registered in installed_plugins.json")
@@ -2524,6 +2690,8 @@ print("Registered in installed_plugins.json")
 d = load(settings, {})
 for key, _path, _ver in PLUGINS:
     d.setdefault("enabledPlugins", {})[key] = True
+if drop_bundle:
+    d.get("enabledPlugins", {}).pop(bundle_key, None)
 order_plugin_keys(d.get("enabledPlugins"), ORDER, market_name)
 save(settings, d)
 print("Registered in settings.json  (backups in %s)" % BACKUPS)

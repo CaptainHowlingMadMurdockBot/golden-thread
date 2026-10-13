@@ -118,9 +118,9 @@ th, td { border:1px solid #ddd; padding:3px 5px; text-align:left; vertical-align
 <p><strong>Reader:</strong> a daily user — the deepest document, where the <em>why</em> lives
 <strong>Claims last checked against the code:</strong> 2026-10-02 (gt 0.19.1) — see <em>The documents, and what belongs in each</em> in <a href="../CLAUDE.md"><code>CLAUDE.md</code></a>.</p>
 </blockquote>
-<p>Complete reference for gt's forty-one skills and its ten modules. Written against <strong>gt v0.21.0</strong>
+<p>Complete reference for gt's forty-two skills and its ten modules. Written against <strong>gt v0.21.0</strong>
 (gt-wiki 0.2.9; gt-usage 0.1.8; gt-demo, gt-watch, gt-report-card, gt-farm and gt-flow 0.21.0; gt-visualize 0.4.6;
-gt-lotr 0.4.1; gt-pane 0.1.0 — the five named with 0.21.0 are versioned with gt and move with every release, changed or not).</p>
+gt-lotr 0.4.1; gt-pane 0.1.1 — the five named with 0.21.0 are versioned with gt and move with every release, changed or not).</p>
 <blockquote>
 <p><strong>0.21.0 is summarised in <a href="#what-0210-adds">What 0.21.0 adds</a></strong>: the install questions, the two hook routes,
 the I/O brokers, the <code>paranoid</code> group and action tokens, the token profile, calibration, the gt pane and
@@ -980,6 +980,28 @@ row in <code>Projects/README.md</code> marked. Nothing moves and every link stil
 to relocate the folder to <code>Archive/&lt;slug&gt;/</code>. See <a href="#completing-things-gtgt-complete">Closing things</a>.</p>
 <hr />
 <h2 id="setup">Setup</h2>
+<h3 id="gtgt-setup"><code>/gt:gt-setup</code></h3>
+<p>Finishes an install from the Claude prompt. Claude Code can install plugins
+(<code>/plugin marketplace add shaven/golden-thread</code>, then <code>/plugin install gt-all@golden-thread-plugin</code>
+for gt and every module, or <code>gt@golden-thread-plugin</code> for gt alone) but it cannot wire hooks, install
+gt's scripts, record a security level or create a vault; <code>install.sh</code> does, and until 0.21.3 only a
+terminal could run it. On the first session after a prompt-route install gt prints one line saying
+the machine-level setup has not been done (a hook that works before anything is wired, then costs one
+file test per session). <code>/gt:gt-setup</code> is the answer: it asks with question screens, <strong>modules first</strong>
+(Install everything (recommended) / Choose modules / Core only), then the installer's own questions
+(security level first, the words of <code>install.sh --questions</code>), then the vault; shows one review
+screen; and runs the installer with exactly those answers through <code>gt_setup.py run</code>, which passes
+<code>--all-modules</code>, <code>--core-only</code> (plus <code>--with NAME</code> for the chosen ones), <code>--answers</code> and <code>--vault</code>.
+Nothing runs before you confirm, and a security question is never answered for you. Re-run it any time
+to add or remove modules.</p>
+<p><code>gt-all</code> is the bundle: its <code>dependencies</code> are gt, wiki, flow, usage, visualize, report-card, watch,
+demo and the pane, generated from the module list by <code>dev/plugins.py marketplace</code> so it cannot drift.
+<code>lotr</code> and <code>farm</code> stay opt-in (choose modules). If you later turn a bundle module off, the installer
+removes <code>gt-all</code> itself (a dependent would switch the module back on) and says so. <code>gt_setup.py
+status</code> exits 0 when set up, 1 when not; <code>plan --json</code> prints what the skill asks; <code>run --dry-run</code>
+prints the installer command without running it. The marketplace named <code>golden-thread-plugin</code> is one
+marketplace whichever route made it: when Claude Code manages it, <code>install.sh</code> leaves it and its
+source alone.</p>
 <h3 id="gtgt-init"><code>/gt:gt-init</code></h3>
 <p>First run, or wiring a new machine. Writes <code>~/.claude/vault-config.json</code> (the
 pointer every other skill reads), scaffolds the vault, and adds a Golden Thread
@@ -5964,6 +5986,29 @@ runs even with <code>model_calibration</code> off; the budget, weekly-allowance 
   the guard makes the forked copy as before, saves its summary as a handoff, and when you come back the first
   choice is <code>/clear</code>: the fresh session in that terminal loads the handoff (<code>handoff_pickup</code>, on by
   default). Handoffs live owner-only in <code>~/.claude/golden-thread/expiry-guard/</code>.</li>
+<li><strong>The guard arms at every turn end (0.21.2).</strong> It used to arm only on Claude Code's <code>idle_prompt</code>
+  notification, a single 60-second timer that gives up for the whole idle period when you touched the
+  terminal, a dialog was open, or background agents ran, so a large session could go unarmed for hours
+  with nothing logged. A <code>Stop</code> hook now arms after every reply (the <code>idle_prompt</code> arm remains and only
+  completes the pairing with the mod). If neither hook arms, the mod plans for itself at its last poll
+  from <code>vault-config.json</code>, the context size Claude Code reports and <code>CLAUDE_CODE_PROMPT_CACHE_TTL</code>.
+  Every case where the guard declined to arm is one <code>arm-skipped</code> line in <code>guard.log</code> with the reason and
+  the hook (<code>gt_expiry_guard.py status</code> shows the tail); a repeat of the same reason is logged once.</li>
+<li><strong>Costs use the model the session mostly runs on.</strong> A skill on a small model can end a long Opus
+  session; the rebuild estimate (the notification, the backstop) is priced at the most frequent model of
+  the last 50 replies, not at the last reply's. The warm compaction still runs on the last reply's
+  model, because that is the model whose cache is warm.</li>
+<li><strong>Cold resume starts small.</strong> When the cache has already lapsed, whoever compacts pays a full write at
+  that model's price. The backstop therefore adds a choice, <code>/model &lt;small&gt;</code>, <code>/compact</code>,
+  <code>/model &lt;main&gt;</code>, with both estimates, when a cheaper model's context window holds the session. A
+  closed session the job reaches only after the cache lapsed (a laptop that slept) is compacted on the
+  cheapest model that fits (<code>gt_model_prices.json</code> <code>ladder</code> and <code>windows</code>), moving up one model on a
+  failure, only when the estimate is under $0.25 and <code>closed_sessions</code> is <code>compact</code>. Windows marked
+  <code>verified: false</code> in that file are conservative guesses.</li>
+<li><strong>The ledger counts what a lapse cost.</strong> The <code>backstop</code> event keeps its <code>actual_eq</code> and
+  <code>counterfactual_eq</code> (it claims no saving) and gains <code>main_model</code>, <code>lost_usd</code>, <code>lost_eq</code>, <code>warm_usd</code>,
+  <code>missed_usd</code> and <code>missed_eq</code>: what the rebuild cost and what a warm handoff and compact would have saved,
+  all <code>estimated</code>.</li>
 </ul>
 <h3 id="persona-aligned-output-19-45">Persona-aligned output (#19, #45)</h3>
 <p><code>persona</code> picks a role (<code>product-manager</code>, <code>project-manager</code>, <code>developer</code>, <code>executive</code>, <code>leadership</code>,
@@ -6038,9 +6083,9 @@ user</code> for all), with optional <code>--sandbox</code> edits, <code>--until 
 <code>--dry-run</code>. It records exactly what it added after a backup; <code>off</code> removes only that. It never writes
 modes, hooks, skip-permissions or <code>GT_TEST_GATE</code>, and every Core-rule gate is untouched.</p>
 <h3 id="the-gt-pane-41-and-getting-started-36">The gt pane (#41) and getting started (#36)</h3>
-<p>The optional module <strong>gt-pane 0.1.0</strong> (Claude Code 2.1.296 or newer since gt 0.21.2; install with <code>--with pane</code>) shows a
+<p>The optional module <strong>gt-pane 0.1.1</strong> (Claude Code 2.1.296 or newer since gt 0.21.2; install with <code>--with pane</code>) shows a
 28-column pane of 12 bordered buttons (hotkeys 1-9, 0, q, w) that send plain-words prompts as your own
-words. <code>/gt-pane-buttons</code> toggles it; a small x closes it; <strong>Arrange</strong> mode reorders; <code>/gt-pane:gt-pane</code> edits the list
+words. <code>/gt-pane-buttons</code> toggles it; a small x closes it; <strong>Arrange</strong> mode reorders; <strong>Update Actions</strong> (below Arrange) or <code>/gt-pane:gt-pane</code> edits the list
 in plain words ("move Overdue to the top"). Your list is <code>~/.claude/golden-thread/pane/buttons.json</code>,
 seeded once from your persona and never overwritten. Narrow terminals get a button row above the prompt;
 an allowance footer reads gt-usage (<code>pane_status</code>). <code>pane_at_start</code> is <code>open</code>, <code>closed</code> or <code>off</code>.
@@ -6200,7 +6245,7 @@ on; <code>gt_skeptic.py</code>); <code>accept_review</code> (<code>dialog</code>
 <td><code>expiry_guard.resume_backstop</code></td>
 <td>on</td>
 <td>on, off</td>
-<td>Block the first prompt of a large, expired session once, with the cost and three choices.</td>
+<td>Block the first prompt of a large, expired session once, with the cost and its choices.</td>
 </tr>
 <tr>
 <td><code>expiry_guard.min_tokens</code></td>

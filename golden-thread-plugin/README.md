@@ -134,12 +134,13 @@ Facts move up the hierarchy as they prove themselves general. They never move ba
 
 ---
 
-## Forty-One Skills (plus modules)
+## Forty-Two Skills (plus modules)
 
 ### Setup
 
 | Command | What it does |
 |---|---|
+| `/gt:gt-setup` | Finish an install from the Claude prompt (0.21.3): install everything / choose modules / core only, then the security level and the vault, then the installer runs with your answers. Added after `/plugin install gt-all@golden-thread-plugin`; safe to re-run to change modules. |
 | `/gt:gt-init` | Create a new vault from scratch, or wire an existing vault to a project. Idempotent — safe to re-run. |
 | `/gt:gt-create` | The create verb: `project <slug>` (or a bare slug) scaffolds a project and captures your brain dump into `idea.md` — sub-projects, tags, runbook; `task <text>` adds a task line; `handoff` writes a handoff. Since 0.18.1 a sub-project's `CLAUDE.md` names its real folder. |
 

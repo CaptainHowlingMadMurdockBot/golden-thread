@@ -3,9 +3,9 @@
 > **Reader:** a daily user — the deepest document, where the *why* lives
 > **Claims last checked against the code:** 2026-10-02 (gt 0.19.1) — see *The documents, and what belongs in each* in [`CLAUDE.md`](../CLAUDE.md).
 
-Complete reference for gt's forty-one skills and its ten modules. Written against **gt v0.21.0**
+Complete reference for gt's forty-two skills and its ten modules. Written against **gt v0.21.0**
 (gt-wiki 0.2.9; gt-usage 0.1.8; gt-demo, gt-watch, gt-report-card, gt-farm and gt-flow 0.21.0; gt-visualize 0.4.6;
-gt-lotr 0.4.1; gt-pane 0.1.0 — the five named with 0.21.0 are versioned with gt and move with every release, changed or not).
+gt-lotr 0.4.1; gt-pane 0.1.1 — the five named with 0.21.0 are versioned with gt and move with every release, changed or not).
 
 > **0.21.0 is summarised in [What 0.21.0 adds](#what-0210-adds)**: the install questions, the two hook routes,
 > the I/O brokers, the `paranoid` group and action tokens, the token profile, calibration, the gt pane and
@@ -861,6 +861,31 @@ to relocate the folder to `Archive/<slug>/`. See [Closing things](#completing-th
 ---
 
 ## Setup
+
+### `/gt:gt-setup`
+
+Finishes an install from the Claude prompt. Claude Code can install plugins
+(`/plugin marketplace add shaven/golden-thread`, then `/plugin install gt-all@golden-thread-plugin`
+for gt and every module, or `gt@golden-thread-plugin` for gt alone) but it cannot wire hooks, install
+gt's scripts, record a security level or create a vault; `install.sh` does, and until 0.21.3 only a
+terminal could run it. On the first session after a prompt-route install gt prints one line saying
+the machine-level setup has not been done (a hook that works before anything is wired, then costs one
+file test per session). `/gt:gt-setup` is the answer: it asks with question screens, **modules first**
+(Install everything (recommended) / Choose modules / Core only), then the installer's own questions
+(security level first, the words of `install.sh --questions`), then the vault; shows one review
+screen; and runs the installer with exactly those answers through `gt_setup.py run`, which passes
+`--all-modules`, `--core-only` (plus `--with NAME` for the chosen ones), `--answers` and `--vault`.
+Nothing runs before you confirm, and a security question is never answered for you. Re-run it any time
+to add or remove modules.
+
+`gt-all` is the bundle: its `dependencies` are gt, wiki, flow, usage, visualize, report-card, watch,
+demo and the pane, generated from the module list by `dev/plugins.py marketplace` so it cannot drift.
+`lotr` and `farm` stay opt-in (choose modules). If you later turn a bundle module off, the installer
+removes `gt-all` itself (a dependent would switch the module back on) and says so. `gt_setup.py
+status` exits 0 when set up, 1 when not; `plan --json` prints what the skill asks; `run --dry-run`
+prints the installer command without running it. The marketplace named `golden-thread-plugin` is one
+marketplace whichever route made it: when Claude Code manages it, `install.sh` leaves it and its
+source alone.
 
 ### `/gt:gt-init`
 
@@ -4780,6 +4805,29 @@ runs even with `model_calibration` off; the budget, weekly-allowance and termina
   the guard makes the forked copy as before, saves its summary as a handoff, and when you come back the first
   choice is `/clear`: the fresh session in that terminal loads the handoff (`handoff_pickup`, on by
   default). Handoffs live owner-only in `~/.claude/golden-thread/expiry-guard/`.
+- **The guard arms at every turn end (0.21.2).** It used to arm only on Claude Code's `idle_prompt`
+  notification, a single 60-second timer that gives up for the whole idle period when you touched the
+  terminal, a dialog was open, or background agents ran, so a large session could go unarmed for hours
+  with nothing logged. A `Stop` hook now arms after every reply (the `idle_prompt` arm remains and only
+  completes the pairing with the mod). If neither hook arms, the mod plans for itself at its last poll
+  from `vault-config.json`, the context size Claude Code reports and `CLAUDE_CODE_PROMPT_CACHE_TTL`.
+  Every case where the guard declined to arm is one `arm-skipped` line in `guard.log` with the reason and
+  the hook (`gt_expiry_guard.py status` shows the tail); a repeat of the same reason is logged once.
+- **Costs use the model the session mostly runs on.** A skill on a small model can end a long Opus
+  session; the rebuild estimate (the notification, the backstop) is priced at the most frequent model of
+  the last 50 replies, not at the last reply's. The warm compaction still runs on the last reply's
+  model, because that is the model whose cache is warm.
+- **Cold resume starts small.** When the cache has already lapsed, whoever compacts pays a full write at
+  that model's price. The backstop therefore adds a choice, `/model <small>`, `/compact`,
+  `/model <main>`, with both estimates, when a cheaper model's context window holds the session. A
+  closed session the job reaches only after the cache lapsed (a laptop that slept) is compacted on the
+  cheapest model that fits (`gt_model_prices.json` `ladder` and `windows`), moving up one model on a
+  failure, only when the estimate is under $0.25 and `closed_sessions` is `compact`. Windows marked
+  `verified: false` in that file are conservative guesses.
+- **The ledger counts what a lapse cost.** The `backstop` event keeps its `actual_eq` and
+  `counterfactual_eq` (it claims no saving) and gains `main_model`, `lost_usd`, `lost_eq`, `warm_usd`,
+  `missed_usd` and `missed_eq`: what the rebuild cost and what a warm handoff and compact would have saved,
+  all `estimated`.
 
 ### Persona-aligned output (#19, #45)
 
@@ -4850,9 +4898,9 @@ modes, hooks, skip-permissions or `GT_TEST_GATE`, and every Core-rule gate is un
 
 ### The gt pane (#41) and getting started (#36)
 
-The optional module **gt-pane 0.1.0** (Claude Code 2.1.296 or newer since gt 0.21.2; install with `--with pane`) shows a
+The optional module **gt-pane 0.1.1** (Claude Code 2.1.296 or newer since gt 0.21.2; install with `--with pane`) shows a
 28-column pane of 12 bordered buttons (hotkeys 1-9, 0, q, w) that send plain-words prompts as your own
-words. `/gt-pane-buttons` toggles it; a small x closes it; **Arrange** mode reorders; `/gt-pane:gt-pane` edits the list
+words. `/gt-pane-buttons` toggles it; a small x closes it; **Arrange** mode reorders; **Update Actions** (below Arrange) or `/gt-pane:gt-pane` edits the list
 in plain words ("move Overdue to the top"). Your list is `~/.claude/golden-thread/pane/buttons.json`,
 seeded once from your persona and never overwritten. Narrow terminals get a button row above the prompt;
 an allowance footer reads gt-usage (`pane_status`). `pane_at_start` is `open`, `closed` or `off`.
@@ -4925,7 +4973,7 @@ Every other setting the registry gained since the last manual, so `gt_settings.p
 | `expiry_guard.closed_sessions` | compact | compact, notify, off | What auto does to an idle session no terminal has open (acts only when expiry_guard is auto). |
 | `expiry_guard.open_sessions` | compact | compact, ask, fork, notify, off | What auto does to an idle session still open in a terminal (acts only when expiry_guard is auto). |
 | `expiry_guard.handoff_pickup` | on | on, off | After a fork, offer /clear to continue from the saved handoff, and load it. |
-| `expiry_guard.resume_backstop` | on | on, off | Block the first prompt of a large, expired session once, with the cost and three choices. |
+| `expiry_guard.resume_backstop` | on | on, off | Block the first prompt of a large, expired session once, with the cost and its choices. |
 | `expiry_guard.min_tokens` | 150000 |  | Contexts smaller than this are left alone by the cache-expiry guard (default 150000). |
 | `expiry_guard.margin_min` | auto |  | How many minutes before the cache lapses the guard fires (auto: 5 for a 5-minute cache, 10 for a 1-hour cache). |
 | `expiry_guard.notify` | desktop | desktop, none | Whether the cache-expiry guard shows a desktop notification. |

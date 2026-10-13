@@ -3,7 +3,7 @@
 > **Reader:** quick lookup, and the printed PDF
 > **Claims last checked against the code:** 2026-10-02 (gt 0.19.1) — see *The documents, and what belongs in each* in [`CLAUDE.md`](../CLAUDE.md).
 
-## Version gt 0.21.0 / gt-wiki 0.2.9 / gt-usage 0.1.8 / gt-visualize 0.4.6 / gt-lotr 0.4.1 / gt-pane 0.1.0 / gt-demo, gt-watch, gt-farm, gt-flow, gt-report-card 0.21.0
+## Version gt 0.21.0 / gt-wiki 0.2.9 / gt-usage 0.1.8 / gt-visualize 0.4.6 / gt-lotr 0.4.1 / gt-pane 0.1.1 / gt-demo, gt-watch, gt-farm, gt-flow, gt-report-card 0.21.0
 
 ---
 
@@ -101,12 +101,13 @@ The canonical rule definitions live in `Projects/golden-thread/core-rules/` insi
 
 ---
 
-## gt Skills (41)
+## gt Skills (42)
 
 ### Setup
 
 | Command | What it does |
 |---|---|
+| `/gt:gt-setup` | Finish an install from the Claude prompt: everything / choose modules / core only, then the security level and the vault, then the installer runs with your answers. Run it after `/plugin install gt-all@golden-thread-plugin`. |
 | `/gt:gt-init` | Create a new vault from scratch, or wire an existing vault to a project. Idempotent — safe to re-run. |
 | `/gt:gt-create` | The create verb (0.18.1): `project <slug>` (or a bare slug) scaffolds a project folder with the standard structure and captures your brain dump into `idea.md` — sub-projects, tags, runbook; `task <text>` adds a task line through `gt_task.py add`; `handoff` writes a handoff through `gt_handoff.py`. |
 

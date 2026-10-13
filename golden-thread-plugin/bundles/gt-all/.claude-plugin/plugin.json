@@ -1,0 +1,20 @@
+{
+  "name": "gt-all",
+  "version": "0.21.3",
+  "description": "Golden Thread, everything in one step: installs gt and its modules (demo, flow, pane, report-card, usage, visualize, watch, wiki) as dependencies. Then run /gt:gt-setup. LOTR and farm are opt-in, not in this bundle.",
+  "author": {
+    "name": "Stacy Haven",
+    "email": "shaven@shavenconsulting.com"
+  },
+  "dependencies": [
+    "gt",
+    "gt-demo",
+    "gt-flow",
+    "gt-pane",
+    "gt-report-card",
+    "gt-usage",
+    "gt-visualize",
+    "gt-watch",
+    "gt-wiki"
+  ]
+}

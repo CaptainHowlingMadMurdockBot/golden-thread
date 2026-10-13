@@ -1,0 +1,22 @@
+{
+ "files": {
+  "hooks/hooks.json": {
+   "bytes": 453,
+   "sha256": "6a7b9b99660a891a5f9dd2faf2e03e1d655ffbeaf24f9e80e8c516ac287540f6"
+  },
+  "hooks/pane_core.js": {
+   "bytes": 11708,
+   "sha256": "81a3979e43c03bb0a89fc1ecabcd6d752c6fe8f612aa00997c320ade136c3b58"
+  },
+  "hooks/register.js": {
+   "bytes": 14430,
+   "sha256": "7110d52ed87ec7fd40e580321f28f96ffd475e6a112468b8046104b92740973a"
+  },
+  "scripts/gt_pane.py": {
+   "bytes": 12748,
+   "sha256": "8fcdff81140b6578084f95aa8f58489e7a92f9168834ff7b82f9cba67fa29b6f"
+  }
+ },
+ "generated": "2026-10-13T12:42:27",
+ "version": "0.1.1"
+}

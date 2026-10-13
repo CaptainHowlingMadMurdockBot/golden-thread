@@ -7,7 +7,37 @@
 
 ---
 
-## Option A — Install from GitHub (recommended)
+## Option A — From the Claude prompt (recommended)
+
+No terminal and no clone. In Claude Code:
+
+```
+/plugin marketplace add shaven/golden-thread
+/plugin install gt-all@golden-thread-plugin
+```
+
+`gt-all` is a bundle: Claude Code installs gt and every module it names (wiki, flow, usage,
+visualize, report-card, watch, demo, pane) as dependencies, so there is nothing to pick plugin by
+plugin. `gt@golden-thread-plugin` alone is the minimal install. `lotr` and `farm` are opt-in:
+`/plugin install gt-lotr@golden-thread-plugin`, or choose them in the next step.
+
+Restart Claude Code. The first session shows `gt: Golden Thread is installed but not set up on this
+machine`; run **`/gt:gt-setup`**. It asks, in the prompt:
+
+1. install everything (recommended), choose modules, or core only;
+2. the security level and the other install questions (the same words as `install.sh --questions`);
+3. where your vault lives (or none yet);
+
+then shows one review screen and runs the installer for you with those answers. That is the whole
+install; restart once more when it says so. The installer it runs is the one in the marketplace's
+checkout, and it leaves the marketplace as Claude Code manages it.
+
+To test the prompt route before the repository is published, or from a fork, use a path: `/plugin
+marketplace add /path/to/checkout`, the folder holding `.claude-plugin/marketplace.json`.
+
+---
+
+## Option B — Install from GitHub with a terminal
 
 The plugin lives in the `golden-thread-plugin/` subdirectory of the
 `golden-thread` repo.
@@ -36,6 +66,10 @@ is configured, it stops with **exit 4** and says what it needs rather than inven
 directory and claiming `~/.claude/vault-config.json`. That is a question for a person:
 where should the vault live? Re-run with `--vault` once you know.
 
+At a terminal a new install first asks which modules you want (everything, let me choose, or core
+only). `--all-modules` and `--core-only` answer that question without a terminal, and remembered
+choices are kept like `--with`/`--without`.
+
 `install.sh` resolves its own paths, so it can be run from anywhere. Run
 `bash install.sh --help` for every option.
 
@@ -56,7 +90,7 @@ were, and says `ROLLED BACK`. The vault is not rolled back; it has its own pre-w
 
 ---
 
-## Option B — Install from zip
+## Option C — Install from zip
 
 Build it with `bash package.sh`, or download it from a GitHub release. It is **not** in
 the repo — `*.zip` is gitignored — so a fresh clone will not contain one.
@@ -69,7 +103,7 @@ bash install.sh
 
 ---
 
-## Option C — One-liner (no git required)
+## Option D — One-liner (no git required)
 
 ```bash
 curl -fsSL https://github.com/shaven/golden-thread/archive/refs/heads/main.tar.gz | tar -xz -C /tmp \
