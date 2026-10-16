@@ -3,7 +3,7 @@
 > **Reader:** a daily user — the deepest document, where the *why* lives
 > **Claims last checked against the code:** 2026-10-02 (gt 0.19.1) — see *The documents, and what belongs in each* in [`CLAUDE.md`](../CLAUDE.md).
 
-Complete reference for gt's thirty-seven skills and its eleven modules. Written against **gt v0.21.0**
+Complete reference for gt's thirty-seven skills and its eleven modules. Written against **gt v0.21.5**
 (gt-wiki 0.2.9; gt-usage 0.1.10; gt-farm and gt-report-card 0.21.1; gt-demo 0.21.4; gt-watch and gt-flow 0.21.0; gt-visualize 0.4.6;
 gt-lotr 0.5.0; gt-pane 0.1.1; gt-workflow 0.1.0 — gt-watch and gt-flow are versioned with gt and move with every release, changed or not).
 
@@ -761,6 +761,12 @@ bash install.sh --with farm             # bring one in
 bash install.sh --only farm             # add or update ONE module, nothing else (0.21.4)
 bash install.sh --only farm --check     # what --only would do; changes nothing
 ```
+
+**Claude Code version check (0.21.4).** The installer runs `gt_cc_version.py check` once: it reads
+`claude --version` and wants 2.1.300 or newer, which some of this release needs. At a terminal it offers
+to run `claude update`, and only a yes runs it; anywhere else it prints the command. It never fails or
+stops the install. Run it yourself with `python3 <gt>/scripts/gt_cc_version.py check [--min 2.1.300]
+[--offer] [--json]`.
 
 **One module without the full install (0.21.4).** `--only NAME` adds or updates one module and
 nothing else: no questions, the vault untouched, gt and every other module left at the version

@@ -7,6 +7,8 @@ A Claude Code plugin that turns an Obsidian vault into the single source of trut
 
 
 > [!IMPORTANT]
+> **0.21.5: the install guide in `/gt:gt-help` names the vault folder gt suggests, `~/GoldenThread`.**
+>
 > **0.21.4: connect an MCP service in a few steps, personas that shape the session, a First day
 > walkthrough and role guides, install one module, a safer default vault, MCP over stdio, and the
 > prompt install on Windows.** `install.sh --only NAME` adds or updates one module and nothing else;

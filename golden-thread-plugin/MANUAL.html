@@ -118,7 +118,7 @@ th, td { border:1px solid #ddd; padding:3px 5px; text-align:left; vertical-align
 <p><strong>Reader:</strong> a daily user — the deepest document, where the <em>why</em> lives
 <strong>Claims last checked against the code:</strong> 2026-10-02 (gt 0.19.1) — see <em>The documents, and what belongs in each</em> in <a href="../CLAUDE.md"><code>CLAUDE.md</code></a>.</p>
 </blockquote>
-<p>Complete reference for gt's thirty-seven skills and its eleven modules. Written against <strong>gt v0.21.0</strong>
+<p>Complete reference for gt's thirty-seven skills and its eleven modules. Written against <strong>gt v0.21.5</strong>
 (gt-wiki 0.2.9; gt-usage 0.1.10; gt-farm and gt-report-card 0.21.1; gt-demo 0.21.4; gt-watch and gt-flow 0.21.0; gt-visualize 0.4.6;
 gt-lotr 0.5.0; gt-pane 0.1.1; gt-workflow 0.1.0 — gt-watch and gt-flow are versioned with gt and move with every release, changed or not).</p>
 <blockquote>
@@ -908,6 +908,11 @@ bash install.sh --with farm             # bring one in
 bash install.sh --only farm             # add or update ONE module, nothing else (0.21.4)
 bash install.sh --only farm --check     # what --only would do; changes nothing
 </code></pre>
+<p><strong>Claude Code version check (0.21.4).</strong> The installer runs <code>gt_cc_version.py check</code> once: it reads
+<code>claude --version</code> and wants 2.1.300 or newer, which some of this release needs. At a terminal it offers
+to run <code>claude update</code>, and only a yes runs it; anywhere else it prints the command. It never fails or
+stops the install. Run it yourself with <code>python3 &lt;gt&gt;/scripts/gt_cc_version.py check [--min 2.1.300]
+[--offer] [--json]</code>.</p>
 <p><strong>One module without the full install (0.21.4).</strong> <code>--only NAME</code> adds or updates one module and
 nothing else: no questions, the vault untouched, gt and every other module left at the version
 they have. NAME is the module (<code>farm</code>), its plugin (<code>gt-farm</code>) or one of its skills
@@ -6741,8 +6746,9 @@ setting <code>watch</code> (<code>off</code> · <code>report</code>). <code>add<
 <p><em>Module <code>demo</code> (plugin <code>gt-demo</code>), installed by default. <code>bash install.sh --without demo</code>
 removes it; <code>--with demo</code> brings it back.</em></p>
 <p>A guided tour of Golden Thread on PizzaBot 3000, a fictional pizza-ordering
-project: sixteen core acts, plus one act for each installed module that ships one — <code>wiki</code>,
-<code>watch</code> and <code>flow</code> by default, and <code>workflow</code> and <code>lotr</code> when they are installed. It runs in its <strong>own
+project: twenty core acts, plus one act for each installed module that ships one — <code>wiki</code>,
+<code>watch</code> and <code>flow</code> by default, and <code>workflow</code>, <code>lotr</code>, <code>farm</code>, <code>usage</code>, <code>report-card</code> and <code>pane</code> when they
+are installed. It runs in its <strong>own
 throwaway vault</strong>, so nothing it does can reach yours.</p>
 <pre><code>/gt-demo:gt-demo start    — build the demo vault and print the command that opens it
 /gt-demo:gt-demo tour     — (in the demo session) run the tour; you only click Next
@@ -7362,7 +7368,7 @@ the one scoped fix, through this same record.</p>
 <h3 id="the-gt-pane-41-and-getting-started-36">The gt pane (#41) and getting started (#36)</h3>
 <p>The optional module <strong>gt-pane 0.1.1</strong> (Claude Code 2.1.290 or newer since gt 0.21.4, 2.1.296 in 0.21.2–0.21.3; install with <code>--with pane</code>) shows a
 28-column pane of 12 bordered buttons (hotkeys 1-9, 0, q, w) that send plain-words prompts as your own
-words. <code>/gt-pane-buttons</code> toggles it; a small x closes it; <strong>Arrange</strong> mode reorders; <strong>Update Actions</strong> (below Arrange) or <code>/gt-pane:gt-pane</code> edits the list
+words. <code>/gt-pane-buttons</code> toggles it; a small x closes it; <strong>Arrange</strong> mode reorders; <strong>Update Actions</strong> (below Arrange) or <code>/gt-pane:gt-pane</code> edits the list; <strong>Open Help</strong> (below Update Actions, key <code>h</code>) opens <code>/gt:gt-help</code>
 in plain words ("move Overdue to the top"). Your list is <code>~/.claude/golden-thread/pane/buttons.json</code>,
 seeded once from your persona and never overwritten. Where the pane cannot dock (below), a button row above the prompt carries the buttons;
 an allowance footer reads gt-usage (<code>pane_status</code>). <code>pane_at_start</code> is <code>open</code>, <code>closed</code> or <code>off</code>.
@@ -7444,7 +7450,9 @@ project, task or handoff is <strong><code>/gt:gt-complete</code></strong>. There
 <h3 id="other-additions">Other additions</h3>
 <p><code>/gt:gt-forget</code> retracts a wrong fact (<code>gt_forget.py</code>); <code>/gt:gt-grant</code> lets one command through for a time
 (<code>gt_grant.py</code>); skeptic defaults (<code>skeptic_pass</code> on, <code>skeptic_max_flags</code> 7, <code>skeptic_record_outcomes</code>
-on; <code>gt_skeptic.py</code>); <code>accept_review</code> (<code>dialog</code> or <code>full</code>) for <code>gt_accept.py</code>; <code>closeout_later_days</code> for
+on; <code>gt_skeptic.py</code>); <code>accept_review</code> (<code>dialog</code> or <code>full</code>) for <code>gt_accept.py</code>; <code>owner_command_script</code> (<code>off</code>, or <code>on</code> to hand a
+<code>needs_owner</code> command over as a self-deleting script, <code>zsh &lt;path&gt;</code>, instead of the command on the clipboard)
+for <code>gt_owner_cmd.py</code>; <code>closeout_later_days</code> for
 <code>later --until &lt;date&gt;</code>; <code>ingest_specialists</code>; <code>knowledge_unread_days</code> and <code>knowledge_read_often</code>
 (<code>gt_use.py</code>, read and use recency); <code>savings_ledger</code>. The lint has 26 checks, the newest being
 <code>retraction-missing</code>.</p>

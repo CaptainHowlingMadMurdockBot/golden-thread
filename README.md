@@ -21,6 +21,8 @@ and blocks it if the rule was broken.
 
 
 > [!IMPORTANT]
+> **0.21.5:** the install guide in `/gt:gt-help` names the vault folder gt suggests, `~/GoldenThread`.
+>
 > **0.21.4:** connect an MCP service in a few steps from a catalog of sixteen templates (say
 > "connect Linear"; `lotr setup`), personas that shape the session as well as new projects, a First
 > day walkthrough and a guide per role in `/gt:gt-help`, `install.sh --only NAME` to add or update

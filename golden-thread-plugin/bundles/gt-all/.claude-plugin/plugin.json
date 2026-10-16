@@ -1,6 +1,6 @@
 {
   "name": "gt-all",
-  "version": "0.21.4",
+  "version": "0.21.5",
   "description": "Golden Thread, everything in one step: installs gt and its modules (demo, flow, pane, report-card, usage, visualize, watch, wiki) as dependencies. Then run /gt:gt-setup. LOTR, farm and workflow are opt-in, not in this bundle.",
   "author": {
     "name": "Stacy Haven",

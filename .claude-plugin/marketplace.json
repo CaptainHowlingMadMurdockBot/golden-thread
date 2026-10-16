@@ -10,15 +10,15 @@
   "plugins": [
     {
       "name": "gt",
-      "source": "./golden-thread-plugin/golden-thread/0.21.4",
+      "source": "./golden-thread-plugin/golden-thread/0.21.5",
       "description": "Golden Thread: vault-based AI memory system with an enforced Core-rule tier. Turns an Obsidian vault into the single source of truth for all Claude Code sessions, and installs hooks that re-assert and validate the rules that must never drift.",
-      "version": "0.21.4"
+      "version": "0.21.5"
     },
     {
       "name": "gt-all",
       "source": "./golden-thread-plugin/bundles/gt-all",
       "description": "Golden Thread, everything in one step: installs gt and its modules (demo, flow, pane, report-card, usage, visualize, watch, wiki) as dependencies. Then run /gt:gt-setup. LOTR, farm and workflow are opt-in, not in this bundle.",
-      "version": "0.21.4"
+      "version": "0.21.5"
     },
     {
       "name": "gt-demo",

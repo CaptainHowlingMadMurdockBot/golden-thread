@@ -1,0 +1,27 @@
+{
+  "note": "USD per million INPUT tokens, list price, read by gt_optimize_session.py to price prompt-cache writes found in Claude Code transcripts. Matched by substring in this order; the first match wins, so specific spellings come before family names. This file RECOGNISES model ids that already appear in transcripts; it never selects a model (that is packs/core/model.intents.pack.json). It is the one other file tests/test_gt_model.py lets carry model ids.",
+  "default": 3.0,
+  "prices": [
+    ["claude-3-opus", 15.0], ["claude-opus-4-0", 15.0], ["claude-opus-4-1", 15.0],
+    ["claude-opus-4-20", 15.0],
+    ["claude-fable", 10.0], ["claude-mythos", 10.0],
+    ["claude-opus-5-5", 4.0],
+    ["opus", 5.0],
+    ["claude-3-haiku", 0.25], ["claude-3-5-haiku", 0.8], ["claude-haiku-5-5", 0.1], ["haiku", 1.0],
+    ["claude-sonnet-5-5", 2.0], ["claude-sonnet-5", 2.0],
+    ["sonnet", 3.0]
+  ],
+  "windows_note": "Context window in tokens, [needle, window, verified], matched by substring in this order like prices (first match wins). verified true = read from the model catalog inside Claude Code 2.1.296 (self-verified from the binary, 2026-10-13, not from API docs). verified false = a conservative guess for a family spelling not in that catalog; the expiry guard's cold-compaction ladder uses it as is. The ladder lists the cheaper models to try first, smallest first; the session's own main model is always the last step.",
+  "windows": [
+    ["claude-haiku-5-5", 1000000, true], ["claude-sonnet-5-5", 1000000, true], ["claude-sonnet-5", 1000000, true],
+    ["claude-opus-5-5", 1000000, true], ["claude-opus-5", 1000000, true], ["claude-opus-4-8", 1000000, true],
+    ["claude-opus-4-7", 1000000, true], ["claude-opus-4-6", 200000, true], ["claude-opus-4-5", 200000, true],
+    ["claude-opus-4-1", 200000, true], ["claude-opus-4-0", 200000, true], ["claude-opus-4-20", 200000, false],
+    ["claude-sonnet-4-6", 200000, true], ["claude-sonnet-4-5", 200000, true],
+    ["claude-haiku-4-5", 200000, true], ["claude-3-5-haiku", 200000, true], ["claude-3-5-sonnet", 200000, true],
+    ["claude-fable", 1000000, true], ["claude-mythos", 1000000, true],
+    ["haiku", 200000, false], ["sonnet", 200000, false], ["opus", 200000, false]
+  ],
+  "default_window": 200000,
+  "ladder": ["claude-haiku-5-5", "claude-sonnet-5-5"]
+}

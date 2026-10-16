@@ -3,7 +3,7 @@
 > **Reader:** quick lookup, and the printed PDF
 > **Claims last checked against the code:** 2026-10-02 (gt 0.19.1) — see *The documents, and what belongs in each* in [`CLAUDE.md`](../CLAUDE.md).
 
-## Version gt 0.21.4 / gt-wiki 0.2.9 / gt-usage 0.1.10 / gt-visualize 0.4.6 / gt-lotr 0.5.0 / gt-pane 0.1.1 / gt-workflow 0.1.0 / gt-farm 0.21.1 / gt-report-card 0.21.1 / gt-demo 0.21.4 / gt-watch, gt-flow 0.21.0
+## Version gt 0.21.5 / gt-wiki 0.2.9 / gt-usage 0.1.10 / gt-visualize 0.4.6 / gt-lotr 0.5.0 / gt-pane 0.1.1 / gt-workflow 0.1.0 / gt-farm 0.21.1 / gt-report-card 0.21.1 / gt-demo 0.21.4 / gt-watch, gt-flow 0.21.0
 
 ---
 

@@ -11,6 +11,24 @@ release's own summary line, kept short rather than reconstructed after the fact.
 
 ---
 
+## gt 0.21.5 — 2026-10-16
+
+The install guide in `/gt:gt-help` now names the vault folder gt actually suggests.
+
+- **Fixed: the install guide named the old default vault folder.** Its setup step recommended
+  `Documents/Obsidian/GoldenThreadVault`, and its Obsidian step told you to open that folder. Since
+  0.21.4 the default is `GoldenThread` in your home folder (`~/GoldenThread` on a Mac,
+  `C:\Users\<you>\GoldenThread` on Windows), outside Documents, which macOS and Windows both guard.
+  Both steps now name it, and the setup screen shows gt's real question.
+
+### How this release was tested
+
+0.21.5 is 0.21.4's code with the install guide corrected.
+
+- **Mac (macOS 26):** the full suite, 9,067 tests, all passing, with clean secrets and code scans.
+- **Windows 11 VM:** the help, install, marketplace and version groups, 155 tests, all passing (0.21.4's full suite: 9,056 tests, all passing).
+- **Linux (Amazon Linux 2023 VM):** the same groups, 155 tests, all passing (0.21.4's full suite: 9,044 tests, all passing).
+
 ## gt 0.21.4 — 2026-10-16
 
 Spending fewer tokens without giving up quality (a context nudge, regular auto-compact, the Core rules sent
