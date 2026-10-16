@@ -175,6 +175,30 @@ export function bandLine(st) {
   return 'gt \u00b7 /gt-pane-buttons opens the button pane'
 }
 
+// ---- where the pane really is (0.21.4) -------------------------------------------------------
+// `ui.open` answers { isPlaced: true } at session start BEFORE Claude Code has measured the terminal,
+// so that answer only means "registered", not "drawn"; and the side column docks only in the
+// fullscreen renderer. Under the classic (main-screen) renderer it does not draw, and the owner saw
+// the one-line band alone (2026-10-13: it docked the moment `/tui fullscreen` was run).
+export const FULLSCREEN_HINT = 'gt · pane docks only in fullscreen — run /tui fullscreen'
+
+// Whether the buttons must ride in the band, and whether to tell the person why the pane is not docked.
+//   st.open       the pane is open
+//   st.surface    e.surface of a render event
+//   st.viewport   e.viewport of a render event ({columns, rows, isFullscreen?}); absent until the terminal is
+//                 measured, and then the pane's placement is only provisional
+//   st.placed     the engine's record (ui.panes) once a viewport is known, else ui.open's answer
+// The renderer is the terminal's own `isFullscreen` (true fullscreen, false classic, fixed per session);
+// absent means unknown, and nothing is claimed. Only the terminal is told to run /tui.
+// -> { narrow, hint }
+export function placementPlan(st) {
+  if (!st || !st.open) return { narrow: false, hint: false }
+  const v = st.viewport
+  const measured = !!v && typeof v.columns === 'number'
+  const classic = measured && st.surface === 'terminal' && v.isFullscreen === false
+  return { narrow: classic || st.placed === false, hint: classic }
+}
+
 // ---- the allowance footer: read-only figures from the usage module's saved readings ---------
 // Text of readings.jsonl -> the newest line that has a plan figure, or null. Never throws.
 export function newestReading(text) {

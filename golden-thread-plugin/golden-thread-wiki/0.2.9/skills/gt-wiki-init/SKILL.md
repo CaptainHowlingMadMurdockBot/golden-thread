@@ -1,6 +1,6 @@
 ---
 name: gt-wiki-init
-description: "Set up a new LLM Wiki vault from scratch. Use when the user says: set up the wiki, initialize my vault, create a knowledge base, install the wiki structure, get me started with the gt-wiki plugin. Gathers the vault path and domain, then runs the bundled init script which generates everything deterministically."
+description: "Set up a new LLM Wiki vault: ask the path and domain, then run the bundled init script. Use when the user says: set up the wiki, initialize my vault, create a knowledge base, get me started with the gt-wiki plugin."
 plain:
   - cmd: "/gt-wiki:gt-wiki-init"
     does: "Sets up a new wiki from scratch."

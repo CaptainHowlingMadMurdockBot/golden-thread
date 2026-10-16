@@ -1,6 +1,6 @@
 ---
 name: gt-pane
-description: "Change the gt button pane in plain words: move, reorder, swap, add, remove, rename or re-word its buttons, put one at the top, reset the list to a role's defaults, or turn the pane or its allowance line on and off. Commands (run for the user, never by hand-editing the file): list, move, swap, add, remove, rename, set-prompt, reset. Use when the user says: move Overdue to the top, put Start my day first, reorder my buttons, swap two buttons, add a button for X, make a button that says Y, remove the Z button, delete a button, rename a button, change what a button says, reset my buttons, restore the default buttons, my button list is broken, show my buttons, what buttons do I have, turn the gt pane on, turn the gt pane off, hide the button pane, show the allowance in the pane, stop showing my usage in the pane."
+description: "Change the gt button pane in plain words: move, reorder, swap, add, remove, rename or re-word buttons, reset them to a role's defaults, or turn the pane or its allowance line on or off. Use when the user says: move Overdue to the top, reorder my buttons, add a button for X, remove the Z button, rename a button, change what a button says, reset my buttons, show my buttons, turn the gt pane off, show the allowance in the pane."
 plain:
   - cmd: "/gt-pane:gt-pane"
     does: "Changes the buttons in your gt pane: their order, their names and the words each one sends."
@@ -17,7 +17,13 @@ The gt pane is a column of twelve buttons beside the conversation. Each button h
 
 **Under gt sandbox mode** (the session-start line says SANDBOX MODE; `gt_settings.py get sandbox_mode` prints `on`) Claude's shell cannot write gt's own files. The pane list is one of them, so every change below is a **terminal** step: give the user the exact `gt_pane.py` command to run from a terminal, and carry on. Listing (`list`) still works. With sandbox mode off nothing changes: run the commands as written.
 
-Script: `<base>/../../scripts/gt_pane.py` (installed copy: `~/.claude/golden-thread/hooks/gt_pane.py` -- use that one, its path survives version bumps, and write it as a plain absolute path with no `~`: the lockdown allow rules name that exact path). Call it with `python3`. **Never edit or write `buttons.json` by hand** -- the script validates every change (12 buttons at most, a label of 22 characters at most, no empty text, no control characters) and writes it all-or-nothing, so a mistake can never leave the user with a half-written list. Positions are counted from 1, top to bottom; the keys 1 to 9, 0, - and = are positions 1 to 12.
+| Step | Under sandbox mode |
+|---|---|
+| `gt_pane.py list` | runs as written: it only reads |
+| `gt_pane.py move` / `swap` / `add` / `remove` / `rename` / `set-prompt` / `reset` | **terminal**: it writes `~/.claude/golden-thread/pane/buttons.json` |
+| `gt_settings.py set pane_at_start` / `pane_status` | **terminal**: it writes gt's settings under `~/.claude` |
+
+Script: `<base>/../../scripts/gt_pane.py` (installed copy: `~/.claude/golden-thread/hooks/gt_pane.py` -- use that one, its path survives version bumps, and write it as a plain absolute path with no `~`: the lockdown allow rules name that exact path). Call it with `python3`. **Never edit or write `buttons.json` by hand** -- the script validates every change (12 buttons at most, a label of 22 characters at most, no empty text, no control characters) and writes it all-or-nothing, so a mistake can never leave the user with a half-written list. Positions are counted from 1, top to bottom; the keys 1 to 9, 0, q and w are positions 1 to 12.
 
 ## Plain words to commands
 
@@ -40,7 +46,7 @@ Match a button by its label, ignoring case; if two could match, ask which. If th
 
 `reset` replaces the whole list with a role's defaults and keeps the old file beside it as `buttons.json.before-reset-<time>`; say so, and confirm with the user before running it unless the list is damaged.
 
-After every change, show the new list from the script's own output and say the pane shows it the next time it is opened (`/gt-pane-buttons` twice, or a new session). The pane can also be rearranged without Claude: press **Arrange** in the pane. **Update Actions**, the control below Arrange, starts this skill from the pane.
+After every change, show the new list from the script's own output and say the pane shows it the next time it is opened (`/gt-pane-buttons` twice, or a new session). The pane can also be rearranged without Claude: press **Arrange** in the pane. **Update Actions**, the control below Arrange, starts this skill from the pane, and **Open Help** below it opens `/gt:gt-help`. Neither takes one of the 12 buttons.
 
 ## Turning the pane on and off
 
@@ -51,4 +57,8 @@ Both take effect from the next session, or the next `/gt-pane-buttons`.
 
 ## When the pane does not show
 
-The pane needs Claude Code 2.1.287 or later and a terminal or the desktop app; in VS Code or an older Claude Code it quietly does not appear. In a window narrower than about 144 columns it cannot sit beside the conversation, so the buttons show in a row above the prompt. `/gt-pane-buttons` toggles it. If the buttons file is damaged the pane shows one red line saying so; `gt_pane.py reset` fixes it.
+The pane needs Claude Code 2.1.290 or later and a terminal or the desktop app; in VS Code or an older Claude Code it quietly does not appear. `/gt-pane-buttons` toggles it. If the buttons file is damaged the pane shows one red line saying so; `gt_pane.py reset` fixes it.
+
+**The side column docks only in Claude Code's fullscreen renderer.** Under the classic renderer (the main-screen layout: tmux by default, `CLAUDE_CODE_NO_FLICKER=0`, and some terminals, Obsidian's among them) it does not dock, however wide the window is. The buttons then ride in a row above the prompt, and the line above that row says "pane docks only in fullscreen — run /tui fullscreen". The fix is the user's to make in that session: `/tui fullscreen` (Claude Code restarts and resumes the session to switch), after which the pane docks; `CLAUDE_CODE_NO_FLICKER=1` before starting Claude Code does the same for every session. Check this first when someone says the pane "never docks" or "shows only a one-line band"; do not go looking for a gt fault.
+
+In a fullscreen window narrower than about 144 columns the pane cannot sit beside the conversation either, so the same button row appears (without that hint); widening the window docks it.

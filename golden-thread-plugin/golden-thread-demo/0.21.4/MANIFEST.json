@@ -1,0 +1,46 @@
+{
+ "files": {
+  "scripts/gt_demo.sh": {
+   "bytes": 61763,
+   "sha256": "60a216af990894d9f0b18aedca029007695e556451cc443a0d8b850bc458cfa0"
+  },
+  "templates/demo-pizzabot/project/README.md": {
+   "bytes": 1610,
+   "sha256": "38315d0a46752a44943eba0618d22fda73bbb5835b433f187c7cfe17312fb9a2"
+  },
+  "templates/demo-pizzabot/project/decisions.md": {
+   "bytes": 1170,
+   "sha256": "1c1c539d2defee16fa23ecf4cf9872e9a01bab084efd910ea41aeb27ee009a96"
+  },
+  "templates/demo-pizzabot/project/idea.md": {
+   "bytes": 1301,
+   "sha256": "343098945c7339117d9c630a86fe949085e7bfb566bd8939628092f3e260ba66"
+  },
+  "templates/demo-pizzabot/project/memory/MEMORY.md": {
+   "bytes": 202,
+   "sha256": "3f9861a6dd8221af66c6bf4adf5c5db4ab69e68e5473b1be2a459e32db34e841"
+  },
+  "templates/demo-pizzabot/project/memory/project-context.md": {
+   "bytes": 615,
+   "sha256": "09f5584ef7504ffce68ca0172bb75f9acd87f3155e2f870470956022432b6d99"
+  },
+  "templates/demo-pizzabot/project/research.md": {
+   "bytes": 2097,
+   "sha256": "5213c7b316e1199e4557343605f5b4ab4a05338fe112371b7417f817cdfbe4c1"
+  },
+  "templates/demo-pizzabot/project/source.md": {
+   "bytes": 862,
+   "sha256": "a9fd33ba86bc9182219a246dc482a63e865ffcef0833efe99117caca08ed9ab0"
+  },
+  "templates/demo-pizzabot/sources/2024-01-01 Conversation - PizzaBot Architecture.md": {
+   "bytes": 2105,
+   "sha256": "65d0f2293033c1318e783150c0f3afa382bb1e88c06636c92cbdf1aa648c930b"
+  },
+  "templates/demo-pizzabot/tour.md": {
+   "bytes": 12878,
+   "sha256": "7f2d5a55e2f52c29ae8ea3a5dbfefb45ced9fb06f5a1e6aac4f2634a589e1031"
+  }
+ },
+ "generated": "2026-10-16T14:42:11",
+ "version": "0.21.4"
+}

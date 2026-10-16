@@ -1,6 +1,6 @@
 ---
 name: gt-wiki-lint
-description: "Health-check the user's LLM Wiki. Use when the user says: lint the wiki, check the wiki, wiki health, garden the wiki, find broken links or orphans or stale pages, or on a periodic maintenance request. Runs the bundled deterministic script, then interprets the report and proposes fixes. Vault path via ~/.claude/vault-config.json."
+description: "Health-check the user's LLM Wiki with the bundled script, then propose fixes. Use when the user says: lint the wiki, wiki health, garden the wiki, find broken links or orphans or stale pages. Vault path via ~/.claude/vault-config.json."
 plain:
   - cmd: "/gt-wiki:gt-wiki-lint"
     does: "Health-checks your wiki."

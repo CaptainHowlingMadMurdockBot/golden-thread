@@ -107,22 +107,26 @@
 <strong>Claims last checked against the code:</strong> 2026-10-02 (gt 0.19.1) — see <em>The documents, and what belongs in each</em> in <a href="../CLAUDE.md"><code>CLAUDE.md</code></a>.</p>
 </blockquote>
 <p>A guided walkthrough for your first session. Six steps, ~15 minutes.</p>
-<p><strong>Requirements:</strong> Python 3.8+, Claude Code installed. Written against <strong>gt v0.21.0</strong>. The installer now asks its questions in order, security first (<code>bash install.sh --questions</code> lists them); answer them at the prompt or by flag. The last question can open the Getting started guide (<code>/gt:gt-help</code>).</p>
+<p><strong>Requirements:</strong> Python 3.8+, Claude Code installed. Written against <strong>gt v0.21.4</strong>. The installer now asks its questions in order, security first (<code>bash install.sh --questions</code> lists them); answer them at the prompt or by flag. The last question can open the Getting started guide (<code>/gt:gt-help</code>).</p>
 <hr />
 <h2 id="step-1-install">Step 1 — Install</h2>
 <p>Unzip the plugin and run the installer:</p>
 <pre><code class="language-bash">unzip golden-thread-plugin.zip
 cd golden-thread-plugin
-bash install.sh --vault ~/Documents/GoldenThread
+bash install.sh --vault ~/GoldenThread
 </code></pre>
 <p>Then <strong>restart Claude Code</strong>. The <code>/gt:</code> skills are not available until you do.</p>
 <p><code>--vault</code> names the folder your memory will live in, and lets the installer finish the
 job: it creates the vault (or connects one you already have) and wires the Core-rule
 enforcement hooks, which are wired against a vault and cannot be wired without one.</p>
 <p>Leave it off and the installer asks, if you are at a terminal. If something else is
-running it — an agent, CI — it stops with exit 4 and asks for the decision rather than
-choosing a directory for you. <code>bash install.sh --no-vault</code> installs the plugin alone,
+running it — an agent, CI — it sets the vault up at <code>~/GoldenThread</code> and prints the path
+(0.21.4). <code>bash install.sh --no-vault</code> installs the plugin alone,
 deliberately.</p>
+<p>Keep the vault out of Documents and off synced or shared drives (iCloud, Dropbox, OneDrive,
+Google Drive, Box, network drives): sync tools can rewrite or duplicate files mid-write. The
+installer, <code>/gt:gt-setup</code> and <code>/gt:gt-init</code> warn when a vault is in one of those places and
+recommend <code>~/GoldenThread</code>; it is a warning, not a block.</p>
 <p>The installer sets up <strong><code>gt</code></strong> — memory, projects, session workflow, and enforcement hooks —
 plus each optional <strong>module</strong> that is on:
 - <strong><code>gt-wiki</code></strong> — knowledge base with immutable sources
@@ -134,7 +138,12 @@ plus each optional <strong>module</strong> that is on:
 - <strong><code>gt-farm</code></strong> — work packets for an external AI; <strong>off</strong> unless you add it with
   <code>bash install.sh --with farm</code> (or had <code>/gt:gt-farm</code> before upgrading)</p>
 <p><code>bash install.sh --list-modules</code> shows each one and why it is on or off;
-<code>--without &lt;name&gt;</code> leaves one out, and the choice is remembered.</p>
+<code>--without &lt;name&gt;</code> leaves one out, and the choice is remembered. To add or update one
+module later without the full install, run <code>bash install.sh --only &lt;name&gt;</code>: it asks nothing,
+leaves the vault and every other module alone, and proves that module installed.</p>
+<p>New to gt? <code>/gt:gt-help</code> opens a First day walkthrough and a guide for each role. If you
+picked a role (a persona), gt offers that role's commands first; it never changes what gt
+enforces.</p>
 <hr />
 <h2 id="step-2-initialize-your-vault">Step 2 — Initialize your vault</h2>
 <p>Open any Claude Code session and run:</p>
@@ -265,7 +274,7 @@ they just stop outranking live work.</p>
 /gt-flow:gt-flow           ← draw how knowledge climbed the ladder, one offline HTML file (--redact before sharing)
 /gt-visualize:gt-visualize ← explain a codebase in 3D, or draw it as a code city (one offline HTML file)
 /gt-farm:gt-farm           ← route bulk or mechanical tasks to an external AI service as a work packet (farm module, off by default)
-/gt-demo:gt-demo           ← guided tour in a throwaway demo vault, nine acts plus one per module: start / tour / end / clean / remove
+/gt-demo:gt-demo           ← guided tour in a throwaway demo vault, 16 acts plus one per module: start / tour / end / clean / remove
 </code></pre>
 <hr />
 <h2 id="optional-require-your-presence-gt-unlock">Optional: require your presence (gt unlock)</h2>
@@ -300,6 +309,12 @@ python3 $S/gt_sandbox.py status                  # what it enforces on this plat
 native Windows Claude Code has no sandbox, so only the file-tool rules apply: <strong>friction, not a
 boundary</strong>. It does not stop malware running as you. <a href="SECURITY.md"><code>SECURITY.md</code></a> §8 lists
 exactly what it writes, what it stops and what it does not.</p>
+<h2 id="optional-connect-a-service-gt-lotr">Optional: connect a service (gt-lotr)</h2>
+<p>LOTR is gt's gateway to the systems you work in. Turn it on with <code>bash install.sh --only lotr</code>,
+restart Claude Code, then say "connect Linear" (or GitHub, Slack, Notion and so on). Claude finds
+the service in the template catalog and runs <code>lotr setup</code>: it checks what the service needs,
+tells you where to put the key or sign-in yourself (in your own terminal, never in the chat),
+connects and tests it. <code>/gt:gt-help</code> has the details on its Security tab.</p>
 <h2 id="adding-a-knowledge-base-gt-wiki">Adding a knowledge base (gt-wiki)</h2>
 <p>If you want a structured wiki alongside your project memory:</p>
 <pre><code>/gt-wiki:gt-wiki-init

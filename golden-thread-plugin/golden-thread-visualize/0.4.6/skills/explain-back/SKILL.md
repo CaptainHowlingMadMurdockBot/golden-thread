@@ -1,6 +1,6 @@
 ---
 name: explain-back
-description: "Opt-in only: ask the user 3-5 questions about the seams of a gt-visualize explainer (behaviour, change impact, rationale, failure), one at a time with a prediction pause, and compare each answer with the expected answer copied from the story and the vault. --diff scopes the questions to the scenes whose parts a diff touches. A wrong answer offers a trace of that seam. Never part of any automatic or check-all flow. Use when the user says: explain-back, quiz me on the explainer, test my understanding of the explainer, ask me about the explainer seams, check I understood the walkthrough."
+description: "Opt-in only, never automatic: quiz the user with 3-5 questions on a gt-visualize explainer's seams, one at a time, comparing each answer with the story and the vault; --diff limits it to scenes a diff touches. Use when the user says: explain-back, quiz me on the explainer, test my understanding of the explainer, check I understood the walkthrough."
 plain:
   - cmd: "/gt-visualize:explain-back"
     does: "Quizzes you on the explainer you just read, to find what did not land."

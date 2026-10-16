@@ -1,11 +1,11 @@
-// node --test golden-thread-pane/0.1.0/tests/pane_core.test.mjs
+// node --test golden-thread-pane/0.1.1/tests/pane_core.test.mjs
 // The pure functions the gt pane's register.js imports: no Claude Code API is touched here.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MAX_BUTTONS, HOTKEYS, hotkeyFor, indexForHotkey, parseButtons, serializeButtons,
   parseSetting, parsePersonas, personaSeed, moveButton, swapButtons, fitLabel,
-  arrangeStart, arrangeReduce, bandLine, PLAIN_PERSONAS,
+  arrangeStart, arrangeReduce, bandLine, placementPlan, FULLSCREEN_HINT, PLAIN_PERSONAS,
   newestReading, latestReading, usageFooter, sessionLines, STALE_MS, parseStatusSetting, footerPlan, CLOSE_TIP, shouldShowTip, serializeTipState,
 } from '../hooks/pane_core.js'
 
@@ -276,4 +276,62 @@ test('sessionLines: a figure not known yet is left out, never shown as 0', () =>
   assert.deepEqual(sessionLines(undefined, null), [])
   assert.deepEqual(sessionLines(42, null), ['context 42%'])
   assert.deepEqual(sessionLines(null, { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }), [])
+})
+
+// ---- where the pane really is (0.21.4): ui.open's isPlaced is not proof ---------------------------
+// Claude Code answers ui.open { isPlaced: true } at session start BEFORE the terminal is measured, and the
+// side column docks only in the fullscreen renderer, so the answer alone said "drawn" while nothing was
+// (owner, 2026-10-13: the pane showed only the one-line band until `/tui fullscreen`).
+const TERM = (columns, isFullscreen) => ({ surface: 'terminal', viewport: { columns, rows: 40, isFullscreen } })
+
+test('FULLSCREEN_HINT is the owner\'s sentence, one line that fits an 80-column window', () => {
+  assert.equal(FULLSCREEN_HINT, 'gt \u00b7 pane docks only in fullscreen \u2014 run /tui fullscreen')
+  assert.ok(!FULLSCREEN_HINT.includes('\n'))
+  assert.ok([...FULLSCREEN_HINT].length <= 80)
+})
+
+test('placementPlan: a closed pane needs no row and no hint, whatever the window', () => {
+  assert.deepEqual(placementPlan({ open: false, placed: false, ...TERM(160, false) }), { narrow: false, hint: false })
+  assert.deepEqual(placementPlan({ open: false, placed: true, ...TERM(160, true) }), { narrow: false, hint: false })
+  assert.deepEqual(placementPlan(null), { narrow: false, hint: false })
+  assert.deepEqual(placementPlan({}), { narrow: false, hint: false })
+})
+
+test('placementPlan: fullscreen and placed is a docked pane, no row and no hint', () => {
+  assert.deepEqual(placementPlan({ open: true, placed: true, ...TERM(160, true) }), { narrow: false, hint: false })
+})
+
+test('placementPlan: a fullscreen window too narrow to dock gets the row and no hint', () => {
+  assert.deepEqual(placementPlan({ open: true, placed: false, ...TERM(100, true) }), { narrow: true, hint: false })
+})
+
+test('placementPlan: the classic renderer cannot dock, so the row and the hint show even when placed is true', () => {
+  // the 2.1.296 case: session.start was answered isPlaced:true before the width was measured
+  assert.deepEqual(placementPlan({ open: true, placed: true, ...TERM(160, false) }), { narrow: true, hint: true })
+  assert.deepEqual(placementPlan({ open: true, placed: false, ...TERM(160, false) }), { narrow: true, hint: true })
+  assert.deepEqual(placementPlan({ open: true, placed: undefined, ...TERM(200, false) }), { narrow: true, hint: true })
+})
+
+test('placementPlan: the renderer unknown (isFullscreen absent) claims nothing about it', () => {
+  assert.deepEqual(placementPlan({ open: true, placed: true, ...TERM(160, undefined) }), { narrow: false, hint: false })
+  assert.deepEqual(placementPlan({ open: true, placed: false, ...TERM(160, undefined) }), { narrow: true, hint: false })
+})
+
+test('placementPlan: before the terminal is measured, ui.open\'s answer is only provisional and no hint is given', () => {
+  assert.deepEqual(placementPlan({ open: true, placed: true, surface: 'terminal', viewport: null }), { narrow: false, hint: false })
+  assert.deepEqual(placementPlan({ open: true, placed: false, surface: 'terminal' }), { narrow: true, hint: false })
+  assert.deepEqual(placementPlan({ open: true, placed: true, surface: 'terminal', viewport: { rows: 40 } }), { narrow: false, hint: false })
+})
+
+test('placementPlan: /tui fullscreen is advice for the terminal only, not for the desktop or a phone', () => {
+  for (const surface of ['desktop', 'mobile', 'vscode']) {
+    assert.deepEqual(placementPlan({ open: true, placed: true, surface, viewport: { columns: 120, rows: 40, isFullscreen: false } }),
+      { narrow: false, hint: false }, surface)
+    assert.deepEqual(placementPlan({ open: true, placed: false, surface, viewport: { columns: 120, rows: 40, isFullscreen: false } }),
+      { narrow: true, hint: false }, surface)
+  }
+})
+
+test('bandLine is unchanged by the hint: the hint is its own line, never appended', () => {
+  assert.ok(!bandLine({ open: true }).includes('fullscreen'))
 })

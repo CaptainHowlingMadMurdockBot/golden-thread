@@ -930,7 +930,279 @@ def cmd_restore_cron(a):
     return 0
 
 
+# ── --only NAME: one module, without the whole install (0.21.4) ────────────────────────────
+def cmd_only_target(a):
+    """only-target <root> <name> then <dir> <ver> <plugin> ... of every discovered plugin
+    (index 0 is gt). NAME may be a module name (pane), its plugin (gt-pane), one of its
+    skills (gt-wiki-ingest) or a slash command (/gt-wiki:gt-wiki-ingest): a skill is
+    installed as the module that ships it -- the module is the smallest unit gt installs.
+    Prints "<index>\t<module>\t<plugin>\t<how>"; exit 1 with the reason when refused."""
+    root, raw, rest = a[0], a[1], a[2:]
+    trip = list(zip(rest[0::3], rest[1::3], rest[2::3]))
+    name = raw.strip().lstrip("/")
+    plug_part, _, skill_part = name.partition(":")
+    mods = []                                   # (index, module, plugin, vdir)
+    for i, (d, ver, plugin) in enumerate(trip):
+        vdir = os.path.join(root, d, ver)
+        try:
+            m = load(os.path.join(vdir, "module.json"))
+            mname = m.get("name") if isinstance(m, dict) else None
+        except (OSError, ValueError):
+            mname = None
+        mods.append((i, mname, plugin, vdir))
+    every = ", ".join(sorted(m for _i, m, _p, _v in mods if m))
+
+    def refuse(msg):
+        print("✗ --only %s: %s. Nothing has been installed." % (raw, msg))
+        print("  Modules: %s" % (every or "none in this tree"))
+        return 1
+
+    def pick(i, how):
+        _i, mname, plugin, _v = mods[i]
+        if i == 0 or plugin == "gt":
+            return refuse("that is part of gt itself, not a module; the skills of gt are "
+                          "installed and updated by the full install, %s" % U_INSTALL)
+        if not mname:
+            return refuse("%s is not a module (no module.json); the full install keeps it"
+                          % plugin)
+        print("%d\t%s\t%s\t%s" % (i, mname, plugin, how))
+        return 0
+
+    if name == "gt-all":
+        return refuse("gt-all is the bundle of every module, not one; use the full install")
+    if not name or name == "gt":
+        return refuse("that is gt itself, not a module; use the full install, %s" % U_INSTALL)
+    if skill_part:                              # /plugin:skill
+        for i, _m, plugin, vdir in mods:
+            if plugin == plug_part:
+                if not os.path.isfile(os.path.join(vdir, "skills", skill_part, "SKILL.md")):
+                    return refuse("%s ships no skill %s" % (plugin, skill_part))
+                return pick(i, "skill /%s:%s" % (plugin, skill_part))
+        return refuse("no plugin %s in this tree" % plug_part)
+    for i, mname, plugin, _v in mods:
+        if name == mname:
+            return pick(i, "module")
+    for i, mname, plugin, _v in mods:
+        if name == plugin:
+            return pick(i, "plugin")
+    owners = [i for i, _m, _p, vdir in mods
+              if os.path.isfile(os.path.join(vdir, "skills", name, "SKILL.md"))]
+    if len(owners) == 1:
+        return pick(owners[0], "skill /%s:%s" % (mods[owners[0]][2], name))
+    if len(owners) > 1:
+        return refuse("more than one plugin ships a skill called %s (%s); name it as "
+                      "/plugin:skill" % (name, ", ".join(mods[i][2] for i in owners)))
+    return refuse("no module, plugin or skill of that name in this tree")
+
+
+def cmd_only_installed(a):
+    """only-installed <installed_plugins.json> <cache-root> then plugin names -> one line per
+    name: "<name>\t<version or ->\t<yes when its cache dir is there>"."""
+    installed, cache_root, names = a[0], a[1], a[2:]
+    try:
+        plugins = load(installed).get("plugins") or {}
+    except (OSError, ValueError, AttributeError):
+        plugins = {}
+    for n in names:
+        e = plugins.get("%s@%s" % (n, MARKET))
+        e = e[0] if isinstance(e, list) and e and isinstance(e[0], dict) else {}
+        v = e.get("version") or "-"
+        cached = "yes" if v != "-" and os.path.isdir(os.path.join(cache_root, n, v)) else "no"
+        print("%s\t%s\t%s" % (n, v, cached))
+    return 0
+
+
+def cmd_only_freeze(a):
+    """only-freeze <modules.json> <target> <installed.tsv> <states.tsv>: every module but the target keeps
+    the state it has ON THIS MACHINE. One that resolves on but is not installed (a default-on
+    module this machine never had) is set off for this run: not installed, and with nothing of
+    it present nothing is removed; its recorded choice is untouched, so the next full install
+    adds it. One that is installed but resolves off would be REMOVED by any install, so --only
+    refuses (exit 1) instead of doing that unasked."""
+    path, target, tsv, states = a
+    mods = load(path)
+    have = {}
+    for line in open(tsv, encoding="utf-8"):
+        f = line.rstrip("\n").split("\t")
+        if len(f) >= 2:
+            have[f[0]] = f[1]
+    bad = []
+    for m in mods:
+        if m["name"] == target:
+            continue
+        present = have.get(m["plugin"], "-") != "-"
+        if m["state"] == "on" and not present:
+            m["state"], m["why"] = "off", "only"
+            print("Left out: module %s, not on this machine (the full install adds it)" % m["name"])
+        elif m["state"] == "off" and present:
+            bad.append(m)
+    if bad:
+        for m in bad:
+            print("✗ module %s (%s) is installed here but resolves OFF (%s), so any install "
+                  "would remove it." % (m["name"], m["plugin"], m.get("why") or "choice"))
+        print("  --only changes one module and nothing else. Settle that first: %s --only %s "
+              "keeps it, the full install removes it. Nothing has been installed."
+              % (U_INSTALL, bad[0]["name"]))
+        return 1
+    atomic(path, mods)
+    with open(states, "w", encoding="utf-8", newline="\n") as fh:
+        for m in mods:
+            fh.write("%s\t%s\t%s\t%s\n" % (m["name"], m["state"], m["why"], m["plugin"]))
+    return 0
+
+
+def _sha(p):
+    import hashlib
+    with open(p, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def _body(p):
+    """A skill or agent file without its frontmatter: the model policy rewrites the model and
+    effort lines of the INSTALLED copy only, so that copy is compared by its body."""
+    t = open(p, encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
+    if t.startswith("---"):
+        end = t.find("\n---", 3)
+        if end != -1:
+            return t[end + 4:]
+    return t
+
+
+COPIED_DIRS = (".claude-plugin", "skills", "scripts", "templates", "commands", "hooks", "demo",
+               "packs", "agents", "workflows", "help")
+COPIED_FILES = ("module.json", "MANIFEST.json")
+
+
+def _tree(root):
+    out = set()
+    for d in COPIED_DIRS:
+        for dp, dn, fn in os.walk(os.path.join(root, d)):
+            dn[:] = [x for x in dn if x != "__pycache__"]
+            for f in fn:
+                if f.endswith(".pyc") or f == ".DS_Store":
+                    continue
+                out.add(os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/"))
+    for f in COPIED_FILES:
+        if os.path.isfile(os.path.join(root, f)):
+            out.add(f)
+    return out
+
+
+def cmd_only_verify(a):
+    """only-verify <modules.json> <module> <home> <cache-root> <marketplace or -> <installed>
+    <settings> <gt-src> -> the self-proof of one module: PASS/FAIL rows, exit 1 on any FAIL.
+    It proves what a full install lays down for that module: the cache is the release (nothing
+    missing, changed or left over), it is the only cached version, it is registered, enabled
+    and in the marketplace, its hook-dir scripts are the release copies, its hooks are wired,
+    and the choice is recorded so the next full install keeps it."""
+    modjson, target, home, cache_root, market, installed, settings, src = a
+    m = next((x for x in load(modjson) if x["name"] == target), None)
+    rows = []
+
+    def row(ok, what, detail):
+        rows.append((ok, what, detail))
+
+    if m is None:
+        print("FAIL  module       %s is not in this tree" % target)
+        return 1
+    plugin, ver = m["plugin"], m["version"]
+    vsrc = os.path.join(os.path.dirname(os.path.dirname(src)), m["dir"], ver)
+    cache = os.path.join(cache_root, plugin, ver)
+    key = "%s@%s" % (plugin, MARKET)
+    if not os.path.isdir(cache):
+        row(False, "files", "no cache at %s" % cache)
+    else:
+        want, have = _tree(vsrc), _tree(cache)
+        extra_top = sorted(x for x in os.listdir(cache)
+                           if x not in COPIED_DIRS + COPIED_FILES + ("__pycache__",)
+                           and not x.startswith("."))
+        missing, extra, changed = sorted(want - have), sorted(have - want), []
+        for rel in sorted(want & have):
+            s, c = os.path.join(vsrc, rel), os.path.join(cache, rel)
+            if rel.endswith(".md") and rel.split("/")[0] in ("skills", "agents"):
+                if _body(s) != _body(c):
+                    changed.append(rel)
+            elif _sha(s) != _sha(c):
+                changed.append(rel)
+        probs = []
+        if missing:
+            probs.append("missing: %s" % ", ".join(missing[:5]))
+        if changed:
+            probs.append("differs from the release: %s" % ", ".join(changed[:5]))
+        if extra or extra_top:
+            probs.append("left over: %s" % ", ".join((extra + extra_top)[:5]))
+        row(not probs, "files", "; ".join(probs) or "%d file(s), identical to the release"
+            % len(want))
+    try:
+        others = sorted(v for v in os.listdir(os.path.join(cache_root, plugin))
+                        if v != ver and not v.startswith("."))
+    except OSError:
+        others = []
+    row(not others, "one-version", ("superseded cache left: %s" % ", ".join(others)) if others
+        else "only %s is cached" % ver)
+    try:
+        e = (load(installed).get("plugins") or {}).get(key)
+        e = e[0] if isinstance(e, list) and e and isinstance(e[0], dict) else {}
+    except (OSError, ValueError, AttributeError):
+        e = {}
+    ip = e.get("installPath") or ""
+    row(e.get("version") == ver and bool(ip) and os.path.normcase(os.path.normpath(ip))
+        == os.path.normcase(os.path.normpath(cache)), "registered",
+        "installed_plugins.json %s: %s" % (key, e.get("version")))
+    try:
+        en = (load(settings).get("enabledPlugins") or {}).get(key)
+    except (OSError, ValueError, AttributeError):
+        en = None
+    row(en is True, "enabled", "settings.json enabledPlugins %s = %s" % (key, en))
+    if market != "-":
+        try:
+            names = [p.get("name") for p in load(os.path.join(
+                market, ".claude-plugin", "marketplace.json"))["plugins"]]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            names = []
+        pj = os.path.join(market, "plugins", plugin, ".claude-plugin", "plugin.json")
+        same = os.path.isfile(pj) and _sha(pj) == _sha(
+            os.path.join(vsrc, ".claude-plugin", "plugin.json"))
+        probs = []
+        if plugin not in names:
+            probs.append("not listed in marketplace.json")
+        if not same:
+            probs.append("its marketplace plugin.json is not the release copy")
+        row(not probs, "marketplace", "; ".join(probs) or "listed and populated")
+    hooks = os.path.join(home, ".claude", "golden-thread", "hooks")
+    srcs = list(m["hookdir_scripts"]) + [h["src"] for h in m["hook_scripts"] if h["src"]]
+    bad = sorted({os.path.basename(p) for p in srcs
+                  if not os.path.isfile(os.path.join(hooks, os.path.basename(p)))
+                  or _sha(p) != _sha(os.path.join(hooks, os.path.basename(p)))})
+    if srcs:
+        row(not bad, "hook-scripts", ("not the release copy: %s" % ", ".join(bad)) if bad
+            else "%d script(s) in the hooks dir match the release" % len(set(srcs)))
+    scripts = {h["script"] for h in m["hook_scripts"]}
+    if scripts:
+        try:
+            r = subprocess.run([sys.executable, os.path.join(src, "scripts", "gt_components.py"),
+                                "wiring", src, "--home", home], capture_output=True, text=True,
+                               timeout=120)
+            unwired = [ln.strip() for ln in r.stdout.splitlines()
+                       if set(ln.split()) & scripts]
+            row(not unwired, "hooks", "; ".join(unwired) if unwired
+                else "%d hook(s) wired" % len(m["hook_scripts"]))
+        except (OSError, subprocess.SubprocessError) as exc:
+            row(False, "hooks", "could not run the wiring check: %s" % exc)
+    ch = read_choices(home).get(target)
+    row(ch == "on" or (ch is None and m.get("default") == "on"), "choice",
+        "install-choices.json %s = %s" % (target, ch) if ch is not None
+        else "no recorded choice; on by default" if m.get("default") == "on"
+        else "no recorded choice, and %s is off by default: the next full install would "
+             "remove it" % target)
+    for ok, what, detail in rows:
+        print("%-4s  %-12s %s" % ("PASS" if ok else "FAIL", what, detail))
+    return 0 if all(ok for ok, _w, _d in rows) else 1
+
+
 CMDS = {"scan": cmd_scan, "resolve": cmd_resolve, "record": cmd_record, "list": cmd_list,
+        "only-target": cmd_only_target, "only-installed": cmd_only_installed,
+        "only-freeze": cmd_only_freeze, "only-verify": cmd_only_verify,
         "summary": cmd_summary, "onfiles": cmd_onfiles, "names": cmd_names,
         "bundle": cmd_bundle, "external-market": cmd_external_market,
         "remove": cmd_remove, "pick": cmd_pick, "restore-cron": cmd_restore_cron,
@@ -1008,6 +1280,9 @@ QUESTIONS=no             # --questions: print every install question, install no
 JSON_OUT=no              # --json (with --questions)
 UNINSTALL=no             # --uninstall: run gt_uninstall.py instead (0.20.1)
 UNINSTALL_ARGS=()        # what is passed through to it: --check/--dry-run, --yes, ...
+ONLY=""                  # --only NAME (0.21.4): add or update one module, nothing else
+ONLY_CHECK=no            # --only NAME --check / --dry-run: say what it would do, change nothing
+VERBOSE=no               # --verbose: --only prints the installer's whole log, not just its own lines
 ORIG_ARGS=("$@")         # kept for the re-run after a migration changes a module choice
 POSITIONAL=""
 while [ $# -gt 0 ]; do
@@ -1058,6 +1333,9 @@ while [ $# -gt 0 ]; do
     --json)       JSON_OUT=yes; UNINSTALL_ARGS+=("$1"); shift ;;
     --require-checksum) REQUIRE_CHECKSUM=yes; shift ;;
     --uninstall) UNINSTALL=yes; shift ;;
+    --verbose) VERBOSE=yes; shift ;;
+    --only)    ONLY="${2:-}"; [ -n "$ONLY" ] || { echo "✗ --only needs a module, plugin or skill name (see $U_INSTALL --list-modules)"; exit 1; }; shift 2 ;;
+    --only=*)  ONLY="${1#--only=}"; [ -n "$ONLY" ] || { echo "✗ --only needs a module, plugin or skill name"; exit 1; }; shift ;;
     --check|--dry-run|--yes|-y|--keep-vault-config|--discard-queued|--purge-backups|--purge-lotr)
       UNINSTALL_ARGS+=("$1"); shift ;;
     --hook-mode)   GT_HOOK_MODE="${2:-}"; shift 2 || true ;;
@@ -1107,6 +1385,16 @@ install.sh — install the Golden Thread Claude Code plugins (gt and every plugi
                                       let me choose / core only
   ./install.sh --core-only            install gt alone and keep every module off; remembered
   ./install.sh --list-modules         print each module, its state and why, install nothing
+  ./install.sh --only NAME            add or update ONE module and nothing else: no questions, the
+                                      vault untouched, gt and the other modules left as they are.
+                                      NAME is a module (pane), its plugin (gt-pane) or one of its
+                                      skills (gt-wiki-ingest); remembered like --with NAME. Ends with
+                                      a self-proof of that module; a failure is rolled back. Needs
+                                      gt installed at this tree's release (else: the full install)
+  ./install.sh --only NAME --check    say what --only would do, change nothing: exit 0 installed,
+                                      current and complete; 3 it would install, update or repair
+  ./install.sh --only NAME --verbose  the same, printing the installer's whole log (by default
+                                      --only shows the module's lines and its self-proof)
   ./install.sh --model-profile P      the model and effort each skill runs at: average (a new
                                       install's default), very-high, or inherit; remembered
   ./install.sh --lockdown L           how much Claude may run without asking: strict (the
@@ -1154,9 +1442,12 @@ enforcement hooks are wired AGAINST a vault, so an install with no vault leaves 
 present but inert. --vault finishes the job in one command.
 
 With no vault and no --vault:
-  * at a terminal, you are asked where the vault should go;
-  * otherwise (an agent, a pipe, CI) the install stops with exit 4 and says what it
-    needs, rather than inventing a directory and claiming ~/.claude/vault-config.json.
+  * at a terminal, you are asked where the vault should go (~/GoldenThread offered);
+  * otherwise (an agent, a pipe, CI) the vault is set up at ~/GoldenThread
+    (%USERPROFILE%\GoldenThread on Windows), and the path is printed on stderr (0.21.4).
+    Only if that cannot be done does the install stop with exit 4 and say what it needs.
+A vault path in Documents or on a synced or shared drive (iCloud, Dropbox, OneDrive, Google
+Drive, Box, a network share) is warned about, with the reason; you can keep it.
 
 Exit 5 (0.21.0): not at a terminal, a NEW install with a security question unanswered stops
 BEFORE installing anything and names the flags that answer it. An install run by Claude should
@@ -1194,6 +1485,42 @@ case "${GT_HOOK_MODE:-}" in
   ""|plugin|settings) ;;
   *) echo "✗ --hook-mode: ${GT_HOOK_MODE} is not plugin or settings"; exit 1 ;;
 esac
+# --only NAME (0.21.4): one module, without the whole install. It changes that module and
+# nothing else, so every flag that would change something else is refused here, before anything
+# is read or written: the questions, the vault, other modules, a pinned release.
+if [ -n "$ONLY" ]; then
+  _gt_only_bad=""
+  for _a in ${UNINSTALL_ARGS[@]+"${UNINSTALL_ARGS[@]}"}; do
+    case "$_a" in
+      --check|--dry-run) ONLY_CHECK=yes ;;
+      *) _gt_only_bad="$_gt_only_bad $_a" ;;
+    esac
+  done
+  UNINSTALL_ARGS=()
+  [ "$UNINSTALL" = yes ] && _gt_only_bad="$_gt_only_bad --uninstall"
+  [ "$QUESTIONS" = yes ] && _gt_only_bad="$_gt_only_bad --questions"
+  [ "$LIST_MODULES" = yes ] && _gt_only_bad="$_gt_only_bad --list-modules"
+  [ "$LIST_PLUGINS" = yes ] && _gt_only_bad="$_gt_only_bad --list-plugins"
+  [ "${#MODULE_FLAGS[@]}" -gt 0 ] && _gt_only_bad="$_gt_only_bad --with/--without"
+  [ "$ALL_MODULES" = yes ] && _gt_only_bad="$_gt_only_bad --all-modules"
+  [ "$CORE_ONLY" = yes ] && _gt_only_bad="$_gt_only_bad --core-only"
+  [ -n "$POSITIONAL" ] && _gt_only_bad="$_gt_only_bad $POSITIONAL"
+  [ "$NO_VAULT" = yes ] && _gt_only_bad="$_gt_only_bad --no-vault"
+  [ -n "${VAULT_ARG:-}" ] && [ "${VAULT_ARG:-}" != "${GT_VAULT:-}" ] && _gt_only_bad="$_gt_only_bad --vault"
+  [ -n "$ANSWERS_FILE" ] && _gt_only_bad="$_gt_only_bad --answers"
+  for _v in "$LOCKDOWN" "$SANDBOX_MODE" "$PARANOID" "$MODEL_PROFILE" "$EXPIRY_GUARD" "$TOKEN_PROFILE" \
+            "$PERSONA_ALIGNED" "$REPLY_LENGTH" "$OPEN_GUIDE" "$STATUSLINE" "$AST_GREP"; do
+    if [ -n "$_v" ]; then _gt_only_bad="$_gt_only_bad (a setting)"; break; fi
+  done
+  [ "$PERSONA_SET" = yes ] && _gt_only_bad="$_gt_only_bad --persona"
+  if [ -n "$_gt_only_bad" ]; then
+    echo "✗ --only adds or updates one module and changes nothing else; it does not combine with:$_gt_only_bad"
+    echo "  Settings: gt_settings.py set KEY VALUE. Everything else: the full install, $U_INSTALL"
+    exit 1
+  fi
+  VAULT_ARG=""                 # GT_VAULT in the environment: --only never touches the vault
+  ACCEPT_DEFAULTS=no           # an installed machine keeps its answers; nothing is defaulted over them
+fi
 if [ "$LIST_PLUGINS" = yes ]; then
   discover_plugins "$SCRIPT_DIR" | tr '\t' ' '
   exit 0
@@ -1413,6 +1740,82 @@ MARKET_MODE=$(modpy external-market "$KNOWN" "$MARKET_NAME" "$MARKETPLACE" "$SCR
 [ "$MARKET_MODE" = external ] || MARKET_MODE=local
 export GT_MARKET_MODE="$MARKET_MODE"
 
+# ── --only NAME (0.21.4): one module, without the whole install ──────────────────────────────
+#
+# Owner, 2026-10-14: "the ability of installing a skill without going through the full install".
+# Claude Code installs plugins (`claude plugin install gt-pane@golden-thread-plugin`), but it
+# has no install hook, so it cannot do the machine half of a gt module: the hook-dir scripts,
+# the hook wiring, the lockdown rules, the model policy, the recorded choice. A plugin installed
+# that way alone is half a module, and the next full install removes it again when its default
+# is off (nothing recorded it as chosen).
+#
+# --only runs THIS installer -- every machine step, the same code -- with three differences, so
+# the result cannot drift from what a full install lays down:
+#   * the plugin set is the machine as it is: gt at the release it already has (a different gt
+#     in this tree is refused: that is an upgrade, the full install's job), every other plugin
+#     at the version it already has (an older one this tree still carries is pinned; one it no
+#     longer carries is refused), a module this machine never had is left out, and only NAME
+#     moves to the newest release that admits that gt. NAME is recorded on (--with NAME).
+#   * nothing is asked: stdin is closed, so every question keeps its current answer.
+#   * the vault is not touched (no backup, no refresh, no upgrade), and the release gate is
+#     replaced by a self-proof of NAME alone (modpy only-verify). A FAIL there exits 9, and
+#     every non-zero exit after the first write is rolled back by the snapshot below.
+# --check / --dry-run stop after the plan: exit 0 when NAME is installed, current and passes its
+# self-proof; 3 when the install would change something; 1 when --only refuses.
+ONLY_MODULE="" ONLY_PLUGIN="" ONLY_INDEX="" ONLY_FROM="" ONLY_TO=""
+if [ -n "$ONLY" ]; then
+  _oargs=()
+  i=0
+  while [ "$i" -lt "$PLUGIN_COUNT" ]; do
+    _oargs+=("${PLUGIN_DIRS[$i]}" "${PLUGIN_VERS[$i]}" "${PLUGIN_NAMES[$i]}")
+    i=$((i + 1))
+  done
+  _otarget=$(modpy only-target "$SCRIPT_DIR" "$ONLY" ${_oargs[@]+"${_oargs[@]}"}) || {
+    printf '%s\n' "$_otarget"; exit 1; }
+  IFS="$(printf '\t')" read -r ONLY_INDEX ONLY_MODULE ONLY_PLUGIN _ohow <<<"$_otarget"
+  ONLY_TSV=$(modpy only-installed "$INSTALLED" "$CACHE_ROOT" "${PLUGIN_NAMES[@]}")
+  only_have() {  # $1 = plugin name -> its installed version, or - ; $2 = field (2 version, 3 cached)
+    printf '%s\n' "$ONLY_TSV" | awk -F'\t' -v n="$1" -v f="${2:-2}" '$1 == n {print $f}'
+  }
+  if [ "$(only_have gt)" = "-" ] || [ ! -f "$HOME/.claude/golden-thread/hooks/gt_paths.py" ]; then
+    echo "✗ --only $ONLY: gt is not installed on this machine, so there is no gt to add a module to."
+    echo "  Install gt first: $U_INSTALL  (then --only adds or updates one module). Nothing has been installed."
+    exit 1
+  fi
+  if [ "$(only_have gt)" != "$VERSION" ]; then
+    echo "✗ --only $ONLY: this machine has gt $(only_have gt), and this tree installs gt $VERSION."
+    echo "  Moving gt is an upgrade: run the full install, $U_INSTALL. Nothing has been installed."
+    exit 1
+  fi
+  if [ "$(only_have gt 3)" != yes ]; then
+    echo "✗ --only $ONLY: gt $VERSION is registered here but its plugin files are missing; the full install"
+    echo "  repairs that: $U_INSTALL. Nothing has been installed."
+    exit 1
+  fi
+  echo "--only $ONLY: module $ONLY_MODULE (plugin $ONLY_PLUGIN, $_ohow); gt $VERSION and every other module stay as they are"
+  i=1
+  while [ "$i" -lt "$PLUGIN_COUNT" ]; do
+    _oh=$(only_have "${PLUGIN_NAMES[$i]}")
+    if [ "$i" = "$ONLY_INDEX" ]; then
+      ONLY_FROM="$_oh"; ONLY_TO="${PLUGIN_VERS[$i]}"
+    elif [ -n "$_oh" ] && [ "$_oh" != "-" ] && [ "$_oh" != "${PLUGIN_VERS[$i]}" ]; then
+      if [ -f "$SCRIPT_DIR/${PLUGIN_DIRS[$i]}/$_oh/.claude-plugin/plugin.json" ]; then
+        echo "  kept ${PLUGIN_NAMES[$i]} $_oh as installed (the full install would move it to ${PLUGIN_VERS[$i]})"
+        PLUGIN_VERS[$i]="$_oh"
+      else
+        echo "✗ --only $ONLY: ${PLUGIN_NAMES[$i]} $_oh is installed here and this tree no longer carries that"
+        echo "  release, so it cannot be kept as it is. Run the full install, $U_INSTALL. Nothing has been installed."
+        exit 1
+      fi
+    fi
+    i=$((i + 1))
+  done
+  MODULE_FLAGS=("with:$ONLY_MODULE")
+  # No question is asked: with stdin closed every [ -t 0 ] below is false, so each question keeps
+  # its current answer and no offer (status line, ast-grep, the guide) is made.
+  exec </dev/null
+fi
+
 # ── The install questions (0.21.0, item #33) ──────────────────────────────────────────────────
 # --questions prints them and installs nothing. Otherwise every answer is resolved NOW, before
 # any file is written: flags, --answers FILE, the terminal, the current values, the defaults. Not
@@ -1428,6 +1831,17 @@ if [ "$QUESTIONS" = yes ]; then
   _gt_rc=0
   python3 -B "$GT_QUESTIONS" "${_gt_qa[@]}" || _gt_rc=$?
   exit "$_gt_rc"
+fi
+# ── Claude Code 2.1.300 or newer (0.21.4) ──────────────────────────────────────────────────────
+# Owner 2026-10-16: "check if it is 300 or higher. If not then we help them install the new
+# version." Advice only: at a terminal it offers `claude update` (and runs it only on a yes); with
+# no terminal or --accept-defaults it prints the command. It never fails or stops the install. A
+# test sandbox skips it (hundreds of installs) unless GT_CC_VERSION_CHECK=1 asks for it.
+if [ "$LIST_MODULES" != yes ] && [ "$QUESTIONS" != yes ] \
+   && { [ -z "${GT_TEST_SANDBOX:-}" ] || [ "${GT_CC_VERSION_CHECK:-}" = 1 ]; }; then
+  _gt_ccv=(check)
+  if [ "$ACCEPT_DEFAULTS" = no ] && [ -t 0 ] && [ -t 1 ]; then _gt_ccv+=(--offer); fi
+  python3 -B "$SRC/scripts/gt_cc_version.py" "${_gt_ccv[@]}" || true
 fi
 # ── Modules in one question (0.22.0) ───────────────────────────────────────────────────────────
 # Before 0.22.0 a person had to turn modules on one at a time (--with NAME, or one /plugin install
@@ -1573,6 +1987,17 @@ GT_SNAP="" GT_SNAP_READY=""
 gt_on_exit() {  # $1 = the exit status
   local rc="$1"
   trap - EXIT
+  if [ "${ONLY_QUIET:-}" = yes ]; then          # --only, quiet: back to the terminal (0.21.4)
+    exec 1>&3 2>&4
+    ONLY_QUIET=""
+    if [ "$rc" -ne 0 ]; then
+      echo "✗ --only $ONLY stopped with exit $rc. The end of the installer's log:"
+      tail -n 30 "$ONLY_LOG" | sed 's/^/  | /'
+      echo "  The whole log: $ONLY_LOG"
+    else
+      rm -f "$ONLY_LOG"
+    fi
+  fi
   # Exit 9 under --force-manifest-mismatch is kept, not rolled back: the tree was installed on
   # purpose although it does not match its manifest, so the gate's components row fails by
   # construction (dev/check_wiring_coverage.py installs tampered trees exactly this way).
@@ -1662,6 +2087,64 @@ resolve_modules() {
   modpy resolve "$GT_TMP/scan.json" "$out" "$HOME" "$states" ${MODULE_FLAGS[@]+"${MODULE_FLAGS[@]}"}
 }
 resolve_modules "$MODJSON" > "$GT_TMP/states.tsv"
+if [ -n "$ONLY" ]; then
+  # The module itself must be installable beside this gt, here: refused, never skipped.
+  _ost=$(awk -F'\t' -v n="$ONLY_MODULE" '$1 == n {print $2 "\t" $3}' "$GT_TMP/states.tsv")
+  if [ "${_ost%%$(printf '\t')*}" != on ]; then
+    case "${_ost#*$(printf '\t')}" in
+      requires) _owhy="its release here (${ONLY_TO}) does not admit gt $VERSION (requires_gt)" ;;
+      platform) _owhy="it does not run on this platform" ;;
+      claude)   _owhy="it $(python3 "$SRC/scripts/gt_components.py" module-cc-gap "$ONLY_MODULE" 2>/dev/null || echo 'needs a newer Claude Code')" ;;
+      invalid)  _owhy="its module.json is invalid ($U_INSTALL --list-modules says why)" ;;
+      *)        _owhy="it resolves off (${_ost#*$(printf '\t')})" ;;
+    esac
+    echo "✗ --only $ONLY: module $ONLY_MODULE cannot be installed: $_owhy. Nothing has been installed."
+    exit 1
+  fi
+  printf '%s\n' "$ONLY_TSV" > "$GT_TMP/only-installed.tsv"
+  modpy only-freeze "$MODJSON" "$ONLY_MODULE" "$GT_TMP/only-installed.tsv" "$GT_TMP/states.tsv" || exit 1
+  ONLY_MARKET="$MARKETPLACE"; [ "$MARKET_MODE" = external ] && ONLY_MARKET="-"
+  only_verify() {
+    modpy only-verify "$MODJSON" "$ONLY_MODULE" "$HOME" "$CACHE_ROOT" "$ONLY_MARKET" \
+      "$INSTALLED" "$SETTINGS" "$SRC"
+  }
+  if [ "$ONLY_CHECK" = yes ]; then
+    if [ "$ONLY_FROM" = "-" ]; then
+      echo "Would install: $ONLY_PLUGIN $ONLY_TO (module $ONLY_MODULE is not on this machine)"
+      echo "--check: nothing was changed. Run it without --check to install."
+      exit 3
+    fi
+    if [ "$ONLY_FROM" != "$ONLY_TO" ]; then
+      echo "Would update: $ONLY_PLUGIN $ONLY_FROM → $ONLY_TO"
+      echo "--check: nothing was changed. Run it without --check to update."
+      exit 3
+    fi
+    echo "$ONLY_PLUGIN $ONLY_TO is installed; checking it is complete:"
+    _orc=0
+    _oout=$(only_verify) || _orc=$?
+    printf '%s\n' "$_oout" | sed 's/^/  /'
+    if [ "$_orc" -ne 0 ]; then
+      echo "Would repair: $ONLY_PLUGIN $ONLY_TO (a FAIL row above). --check: nothing was changed."
+      exit 3
+    fi
+    echo "--check: $ONLY_PLUGIN $ONLY_TO is installed, current and complete; nothing to do."
+    exit 0
+  fi
+  # Quiet by default (0.21.4, owner): the person sees the module's own lines and its self-proof;
+  # the installer's whole log goes to a file, shown (its tail) only if the run fails. --verbose
+  # prints all of it as a full install does.
+  if [ "$VERBOSE" != yes ] && [ -n "${GT_INSTALL_RERUN:-}" ] && [ -n "${GT_ONLY_LOG:-}" ]; then
+    ONLY_LOG="$GT_ONLY_LOG"; ONLY_QUIET=yes   # the migration re-run: fds 3/4 and the log carry over
+  elif [ "$VERBOSE" != yes ]; then
+    ONLY_LOG=$(mktemp "${TMPDIR:-/tmp}/gt-install-only.XXXXXX") || ONLY_LOG=""
+    if [ -n "$ONLY_LOG" ]; then
+      echo "Installing $ONLY_PLUGIN $ONLY_TO (the installer's log: $ONLY_LOG; --verbose shows it all)"
+      exec 3>&1 4>&2 >"$ONLY_LOG" 2>&1
+      ONLY_QUIET=yes
+      export GT_ONLY_LOG="$ONLY_LOG"
+    fi
+  fi
+fi
 
 if [ "$LIST_MODULES" = yes ]; then
   modpy list "$MODJSON" "$VERSION"
@@ -2711,6 +3194,9 @@ if [ -f "$MP" ]; then
   # the install questions (item #33) decided: an answer given or asked is used as it is; a
   # kept/defaulted one falls through to the recorded choice and the rules below
   if [ "${PLAN_model_profile_SRC:-}" = choice ] || [ "${PLAN_model_profile_SRC:-}" = accepted ]; then _prof="$PLAN_model_profile"; fi
+  # a defaulted model_profile is the token profile's value for a machine that never recorded one
+  # (fix B2, 0.21.4): the profile writes it below anyway, so say the same thing here
+  if [ "${PLAN_model_profile_SRC:-}" = default ] && [ -n "${PLAN_model_profile:-}" ]; then _prof="$PLAN_model_profile"; fi
   if [ -z "$_prof" ]; then _prof=$(python3 -B "$MP" current --home "$HOME" 2>/dev/null || true); fi
   if [ -z "$_prof" ]; then
     if [ -z "${GT_PREVIOUS_RELEASE:-}" ]; then
@@ -3195,7 +3681,12 @@ modpy restore-cron "$MODJSON" "$HOME"
 # The default only ever appears in a PROMPT or an instruction, never as something this
 # script picks on its own: an installer that invents a directory and claims the global
 # vault-config.json without being asked is how people learn not to trust installers.
-DEFAULT_VAULT="$HOME/Documents/GoldenThread"
+# ~/GoldenThread since 0.21.4 (was ~/Documents/GoldenThread): macOS and Windows guard Documents,
+# and gt writes into its vault constantly. gt_vault_location.py says why, for any path chosen.
+DEFAULT_VAULT="$HOME/GoldenThread"
+if [ -n "${USERPROFILE:-}" ] && command -v cygpath >/dev/null 2>&1; then
+  DEFAULT_VAULT="$(cygpath -u "$USERPROFILE")/GoldenThread"       # %USERPROFILE%\GoldenThread
+fi
 # Set by setup_vault only when `vault_init fresh` ran in THIS run: the resolved vault path,
 # and whether it was already inside a git repo beforehand. Never inferred from contents.
 VAULT_CREATED_NOW=""
@@ -3282,6 +3773,25 @@ hook_dest() {  # where step 7 wires the enforcement hooks, by route (0.21.0)
   fi
 }
 
+vault_init_reason() {  # $1 = vault_init.py's output: say WHY it refused (0.21.4), not just that it did
+  VI_OUT="$1" python3 -c '
+import json, os, sys
+text = os.environ.get("VI_OUT", "")
+rows = []
+try:
+    rows = [r for r in json.loads(text) if isinstance(r, dict) and r.get("action") in ("conflict", "error")]
+except ValueError:
+    pass
+if rows:
+    for r in rows[:5]:
+        print("    reason: %s %s -- %s" % (r.get("action"), r.get("path", ""), r.get("note", "")))
+else:
+    tail = [l for l in text.splitlines() if l.strip()][-3:]
+    for l in tail or ["(vault_init.py printed nothing; run it by hand to see why)"]:
+        print("    reason: " + l)
+' 2>/dev/null || echo "    reason: (not available)"
+}
+
 setup_vault() {  # $1 = path to create or connect
   local target="$1" mode out
   snapshot_vault_state "$target"
@@ -3298,14 +3808,18 @@ setup_vault() {  # $1 = path to create or connect
     # an initial commit by the vault-upgrade step (see apply_vault_upgrades).
     local git_before=no
     git -C "$target" rev-parse --git-dir >/dev/null 2>&1 && git_before=yes
-    python3 "$SRC/scripts/vault_init.py" fresh --vault "$target" --domain "Personal" \
-      >/dev/null 2>&1 || { echo "⚠ could not create the vault at $target"; return 1; }
+    local vi_out
+    vi_out=$(GT_VAULT_LOCATION_WARNED=1 python3 "$SRC/scripts/vault_init.py" fresh --vault "$target" --domain "Personal" 2>&1) \
+      || { echo "⚠ could not create the vault at $target"
+           vault_init_reason "$vi_out"; return 1; }
     VAULT_CREATED_NOW=$(real_path "$target")
     VAULT_GIT_PREEXISTED="$git_before"
   else
     echo "Connecting the existing vault at $target"
-    python3 "$SRC/scripts/vault_init.py" connect --vault "$target" \
-      >/dev/null 2>&1 || { echo "⚠ could not connect $target"; return 1; }
+    local vi_out
+    vi_out=$(GT_VAULT_LOCATION_WARNED=1 python3 "$SRC/scripts/vault_init.py" connect --vault "$target" 2>&1) \
+      || { echo "⚠ could not connect $target"
+           vault_init_reason "$vi_out"; return 1; }
   fi
   if out=$(python3 "$SRC/scripts/vault_init.py" install-core-rules --vault "$target" 2>/dev/null); then
     echo "Wired enforcement hooks → $(hook_dest)"
@@ -3322,12 +3836,49 @@ setup_vault() {  # $1 = path to create or connect
   return 0
 }
 
+# Vault location (0.21.4): a vault in Documents or on a synced or shared drive (iCloud, Dropbox,
+# OneDrive, Google Drive, Box, a network share) is WARNED about, in plain words with the reason,
+# and ~/GoldenThread recommended -- never refused. At a terminal a NEW vault's path is confirmed
+# (keep it, take the recommended one, or type another); an existing vault is only warned about,
+# and without a terminal the warning goes to stderr and the install carries on. The detection is
+# gt_vault_location.py, the one helper /gt:gt-setup, /gt:gt-init and gt_doctor use too.
+# -> sets VL_CHOSEN to the path to use.
+vault_location_check() {  # $1 = the vault path chosen
+  local path="$1" out rc ans tries=0
+  VL_CHOSEN="$path"
+  [ -f "$SRC/scripts/gt_vault_location.py" ] || return 0      # an older gt (a rollback)
+  while :; do
+    rc=0
+    out=$(python3 "$SRC/scripts/gt_vault_location.py" check "$VL_CHOSEN" 2>/dev/null) || rc=$?
+    [ "$rc" -eq 1 ] || return 0
+    if [ -t 0 ] && [ -t 1 ] && [ ! -d "$VL_CHOSEN/Projects" ] && [ ! -f "$VL_CHOSEN/index.md" ] \
+       && [ "$tries" -lt 3 ]; then
+      question_break
+      printf '%s\n' "$out"
+      printf 'Keep it? [y = keep this path / n = use %s / or type another path]: ' "$DEFAULT_VAULT"
+      read -r ans </dev/tty || ans="y"
+      case "$ans" in
+        ""|y|Y|yes|YES) return 0 ;;
+        n|N|no|NO)      VL_CHOSEN="$DEFAULT_VAULT" ;;
+        *)              VL_CHOSEN="$ans" ;;
+      esac
+      tries=$((tries + 1))
+    else
+      printf '%s\n' "$out" >&2
+      return 0
+    fi
+  done
+}
+
 # --vault (or $GT_VAULT) was given: do the whole job in one command. Runs before the
 # config is read, so the path the user named is the one that gets set up and wired.
 if [ -n "$VAULT_ARG" ] && [ "$NO_VAULT" != yes ]; then
-  setup_vault "$VAULT_ARG" || true
+  vault_location_check "$VAULT_ARG"
+  setup_vault "$VL_CHOSEN" || true
 fi
 VAULT_PATH=$(python3 -c "import json,os;p=os.path.expanduser('~/.claude/vault-config.json');print(json.load(open(p)).get('vault_path','')) if os.path.exists(p) else print('')" 2>/dev/null)
+# --only (0.21.4) never touches the vault: no backup, no hook seeding, no refresh, no upgrade.
+if [ -n "$ONLY" ]; then VAULT_PATH=""; fi
 # Wire the ENFORCEMENT hooks whenever a vault EXISTS — nothing more is required.
 #
 # These are owned by vault_init.py, which until 0.12.1 wired them only when a vault was
@@ -3415,7 +3966,7 @@ if [ -n "$VAULT_PATH" ] && git -C "$VAULT_PATH" rev-parse --git-dir >/dev/null 2
   fi
 fi
 
-if [ -z "$VAULT_PATH" ] || [ ! -d "$VAULT_PATH" ]; then
+if [ -z "$ONLY" ] && { [ -z "$VAULT_PATH" ] || [ ! -d "$VAULT_PATH" ]; }; then
   # No vault. The four enforcement hooks are wired AGAINST a vault, so an install that
   # stops here leaves them inert — which is the state that produced a false "broken
   # install" report on 2026-09-12. Three ways out, and which one applies depends on
@@ -3440,31 +3991,36 @@ if [ -z "$VAULT_PATH" ] || [ ! -d "$VAULT_PATH" ]; then
       *)                CHOSEN="$ANSWER" ;;
     esac
     if [ -n "$CHOSEN" ]; then
-      setup_vault "$CHOSEN" || true
+      vault_location_check "$CHOSEN"
+      setup_vault "$VL_CHOSEN" || true
     else
       echo "Skipped. Run /gt:gt-init in Claude Code when you are ready; that wires them."
     fi
   else
-    # NOT a terminal: an agent, a pipe or CI is running this. Do not guess a path and
-    # do not claim the global config. Stop, and say exactly what is needed, so the
-    # caller can put the question to the person instead of deciding for them.
-    echo ""
-    echo "════════════════════════════════════════════════════════════════════════"
-    echo "INSTALL INCOMPLETE — a vault is needed to finish"
-    echo "════════════════════════════════════════════════════════════════════════"
-    echo "The plugin is installed, but the Core-rule enforcement hooks are NOT wired:"
-    echo "they are wired against a vault, and this machine has none configured."
-    echo ""
-    echo "This is not a failure — it needs one decision that is not mine to make:"
-    echo "WHERE the vault should live. A vault is a plain folder of markdown files."
-    echo ""
-    echo "  Already have one?   $U_INSTALL --vault <path-to-existing-vault>"
-    echo "  Want a new one?     $U_INSTALL --vault \"$(upath "$DEFAULT_VAULT")\""
-    echo "  Deliberately none?  $U_INSTALL --no-vault"
-    echo ""
-    echo "ASK THE USER which they want before re-running. Exit 4 means exactly this."
-    echo "════════════════════════════════════════════════════════════════════════"
-    exit 4
+    # NOT a terminal: an agent, a pipe or CI (0.21.4, owner: "if they do a headless setup it
+    # installs into <user>/GoldenThread by default"). Until 0.21.4 this stopped with exit 4 and
+    # asked for a decision; now the vault is set up at the recommended <home>/GoldenThread, and
+    # the path -- with any location warning -- goes to stderr, so the caller can tell the person.
+    # --no-vault still means no vault. Exit 4 is left only for a default that could not be set up.
+    echo "No vault given and no terminal to ask: setting one up at the default, $(upath "$DEFAULT_VAULT")" >&2
+    echo "  (another place: $U_INSTALL --vault <path>; none at all: --no-vault)" >&2
+    vault_location_check "$DEFAULT_VAULT"
+    if ! setup_vault "$VL_CHOSEN"; then
+      echo ""
+      echo "════════════════════════════════════════════════════════════════════════"
+      echo "INSTALL INCOMPLETE — the default vault could not be set up"
+      echo "════════════════════════════════════════════════════════════════════════"
+      echo "The plugin is installed, but the Core-rule enforcement hooks are NOT wired:"
+      echo "they are wired against a vault, and $(upath "$VL_CHOSEN") could not be used (above)."
+      echo ""
+      echo "  Already have one?   $U_INSTALL --vault <path-to-existing-vault>"
+      echo "  Another new one?    $U_INSTALL --vault <path>"
+      echo "  Deliberately none?  $U_INSTALL --no-vault"
+      echo ""
+      echo "ASK THE USER which they want before re-running. Exit 4 means exactly this."
+      echo "════════════════════════════════════════════════════════════════════════"
+      exit 4
+    fi
   fi
 fi
 
@@ -3519,7 +4075,18 @@ fi
 # you whether the hooks were wired is the line most worth seeing, and it was the
 # one printed after the goodbye.
 echo ""
-echo "Golden Thread $VERSION installed."
+if [ -n "$ONLY" ]; then
+  if [ "$ONLY_FROM" = "-" ]; then
+    ONLY_HEADER="Module $ONLY_MODULE installed: $ONLY_PLUGIN $ONLY_TO, beside gt $VERSION (--only; nothing else changed)."
+  elif [ "$ONLY_FROM" != "$ONLY_TO" ]; then
+    ONLY_HEADER="Module $ONLY_MODULE updated: $ONLY_PLUGIN $ONLY_FROM → $ONLY_TO, beside gt $VERSION (--only; nothing else changed)."
+  else
+    ONLY_HEADER="Module $ONLY_MODULE reinstalled: $ONLY_PLUGIN $ONLY_TO, beside gt $VERSION (--only; nothing else changed)."
+  fi
+  echo "$ONLY_HEADER"
+else
+  echo "Golden Thread $VERSION installed."
+fi
 echo ""
 # The skill lists are DERIVED from what was just installed, not typed here. A
 # hardcoded list is a second copy of the truth, and it goes stale silently: gt 0.10.0
@@ -3570,6 +4137,10 @@ PYEOF
 
 i=0
 while [ "$i" -lt "$PLUGIN_COUNT" ]; do
+  if [ -n "$ONLY" ] && [ "${PLUGIN_NAMES[$i]}" != "$ONLY_PLUGIN" ]; then i=$((i + 1)); continue; fi
+  if [ -n "$ONLY" ]; then
+    ONLY_SKILLS=$(list_skills "$(plugin_cache "$i")/skills" "/${PLUGIN_NAMES[$i]}:" 2>/dev/null || true)
+  fi
   # A module with no skills (gt-report-card is hooks only) gets no empty heading.
   if ls "$(plugin_cache "$i")/skills"/*/SKILL.md >/dev/null 2>&1; then
     echo "${PLUGIN_NAMES[$i]} skills:"
@@ -3626,6 +4197,19 @@ apply_plan_setting() {  # $1 = key
   [ -n "$src" ] || return 0
   [ "$src" != kept ] || return 0
   cur=$(python3 -B "$SRC/scripts/gt_settings.py" get "$key" 2>/dev/null || true)
+  # token_profile is compared with the STORED choice, not `get`: `get` answers the registry default
+  # (calibrated) when nothing is stored, so a fresh machine looked as if the default were in force
+  # and the seven settings it writes were never written (fix B1, 0.21.4). The other keys hold one
+  # value each, so their effective value is the one that counts.
+  if [ "$key" = token_profile ]; then
+    cur=$(python3 -B -c 'import json,os,sys
+try:
+    d = json.load(open(os.path.expanduser("~/.claude/vault-config.json"), encoding="utf-8"))
+except Exception:
+    d = {}
+v = d.get(sys.argv[1]) if isinstance(d, dict) else None
+print(v if isinstance(v, str) else "")' "$key" 2>/dev/null || true)
+  fi
   if [ "$cur" = "$val" ]; then
     echo "  $key: $val ($(plan_words "$src"))"
     return 0
@@ -3651,7 +4235,20 @@ apply_plan_setting sandbox_mode
 apply_plan_setting paranoid
 # the token profile first (it sets seven settings), then the two it shares an answer with: an answer
 # the person gave for the expiry guard or the reply length is applied after it and so wins
+# A token profile nobody chose (defaulted or accepted) must not undo a setting the plan KEPT -- a
+# recorded reply_length or expiry_guard, or the model profile a scripted upgrade leaves as it is:
+# it writes the others and leaves those (fix B2, 0.21.4). A profile the person chose sets all seven.
+GT_TOKEN_PROFILE_KEEP=""
+case "${PLAN_token_profile_SRC:-}" in
+  default|accepted)
+    for _k in model_profile expiry_guard reply_length; do
+      eval "_ks=\${PLAN_${_k}_SRC:-}"
+      if [ "$_ks" = kept ]; then GT_TOKEN_PROFILE_KEEP="${GT_TOKEN_PROFILE_KEEP:+$GT_TOKEN_PROFILE_KEEP,}$_k"; fi
+    done ;;
+esac
+export GT_TOKEN_PROFILE_KEEP
 apply_plan_setting token_profile
+unset GT_TOKEN_PROFILE_KEEP
 apply_plan_setting expiry_guard
 apply_plan_setting reply_length
 apply_plan_setting persona_aligned
@@ -3842,7 +4439,7 @@ apply_vault_upgrades() {
   fi
   echo ""
 }
-apply_vault_upgrades || true
+if [ -z "$ONLY" ]; then apply_vault_upgrades || true; fi
 
 # The pre-write backup stays only when this run changed a file it holds (0.15.0).
 if [ -n "$VAULT_PREWRITE_BACKUP" ] && [ -f "$VAULT_PREWRITE_BACKUP" ]; then
@@ -3900,7 +4497,9 @@ astgrep_state() {
 AG_STATE=0
 astgrep_state || AG_STATE=$?
 
-if [ "$AG_STATE" -eq 0 ]; then
+if [ -n "$ONLY" ]; then
+  :   # --only (0.21.4): ast-grep is a machine tool, not part of a module; nothing to offer here
+elif [ "$AG_STATE" -eq 0 ]; then
   echo ""
   echo "ast-grep $AG_FOUND_VER found ($AG_FOUND) — structural code rules are available."
 elif [ "$AG_STATE" -eq 2 ]; then
@@ -4067,9 +4666,32 @@ if [ -f "$HOME/.claude/golden-thread/hooks/gt_unlock.py" ]; then
 fi
 
 PI_RC=0
-post_install_gate || PI_RC=$?
+if [ -n "$ONLY" ]; then
+  # --only (0.21.4): the release gate validates gt against a vault, which --only does not touch.
+  # The proof here is of the one module installed, and a FAIL is rolled back like any failure.
+  echo ""
+  echo "Self-proof of module $ONLY_MODULE ($ONLY_PLUGIN $ONLY_TO):"
+  _oout=$(only_verify) || PI_RC=$?
+  printf '%s\n' "$_oout" | sed 's/^/  /'
+  if [ "$PI_RC" -ne 0 ]; then
+    echo ""
+    echo "✗ --only $ONLY FAILED its self-proof (the FAIL row above); the install is rolled back. Exit 9."
+    PI_RC=9
+  fi
+else
+  post_install_gate || PI_RC=$?
+fi
 if [ "$PI_RC" -ne 0 ]; then
   exit "$PI_RC"
+fi
+if [ "${ONLY_QUIET:-}" = yes ]; then           # --only, quiet: the module's own lines (0.21.4)
+  {
+    echo "$ONLY_HEADER"
+    if [ -n "${ONLY_SKILLS:-}" ]; then echo "$ONLY_PLUGIN skills:"; printf '%s\n' "$ONLY_SKILLS"; fi
+    echo "Self-proof of module $ONLY_MODULE ($ONLY_PLUGIN $ONLY_TO):"
+    printf '%s\n' "$_oout" | sed 's/^/  /'
+    echo "Restart Claude Code to load it."
+  } >&3
 fi
 
 # gt unlock (0.20.1) ships OFF. Say so once, here -- what it is and how to turn it on -- and
@@ -4093,7 +4715,7 @@ fi
 
 # "Open the guide?" (item #36): a yes opens the Getting started page of the offline help for the chosen
 # persona (the first, when there are several); anything else says how to open it later.
-if [ "${PLAN_open_guide:-}" = yes ]; then
+if [ -z "$ONLY" ] && [ "${PLAN_open_guide:-}" = yes ]; then
   _gp="${PLAN_persona:-}"
   case "$_gp" in none) _gp="" ;; esac
   _gp="${_gp%%,*}"

@@ -1,6 +1,6 @@
 ---
 name: gt-wiki
-description: "ALWAYS CHECK FIRST: The user has an LLM Wiki knowledge base (interlinked markdown pages + immutable sources). Before exploring repos or searching code to answer questions about how things work, READ the wiki index first. Use when: user asks how something works, what a tool does, what conventions to follow, or any platform/infra question. Vault path: read ~/.claude/vault-config.json (key: vault_path); if missing, ask the user once and offer to save it."
+description: "ALWAYS CHECK FIRST: the user has an LLM Wiki (interlinked pages plus immutable sources). Read its index before exploring repos or code. Use when: the user asks how something works, what a tool does, which conventions apply, or any platform question. Vault path: ~/.claude/vault-config.json (vault_path); if missing, ask once and offer to save it."
 plain:
   - cmd: "/gt-wiki:gt-wiki"
     does: "Checks your wiki first when you ask how something works."

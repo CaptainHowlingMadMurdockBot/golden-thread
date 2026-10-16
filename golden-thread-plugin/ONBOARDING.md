@@ -5,7 +5,7 @@
 
 A guided walkthrough for your first session. Six steps, ~15 minutes.
 
-**Requirements:** Python 3.8+, Claude Code installed. Written against **gt v0.21.0**. The installer now asks its questions in order, security first (`bash install.sh --questions` lists them); answer them at the prompt or by flag. The last question can open the Getting started guide (`/gt:gt-help`).
+**Requirements:** Python 3.8+, Claude Code installed. Written against **gt v0.21.4**. The installer now asks its questions in order, security first (`bash install.sh --questions` lists them); answer them at the prompt or by flag. The last question can open the Getting started guide (`/gt:gt-help`).
 
 ---
 
@@ -16,7 +16,7 @@ Unzip the plugin and run the installer:
 ```bash
 unzip golden-thread-plugin.zip
 cd golden-thread-plugin
-bash install.sh --vault ~/Documents/GoldenThread
+bash install.sh --vault ~/GoldenThread
 ```
 
 Then **restart Claude Code**. The `/gt:` skills are not available until you do.
@@ -26,9 +26,14 @@ job: it creates the vault (or connects one you already have) and wires the Core-
 enforcement hooks, which are wired against a vault and cannot be wired without one.
 
 Leave it off and the installer asks, if you are at a terminal. If something else is
-running it — an agent, CI — it stops with exit 4 and asks for the decision rather than
-choosing a directory for you. `bash install.sh --no-vault` installs the plugin alone,
+running it — an agent, CI — it sets the vault up at `~/GoldenThread` and prints the path
+(0.21.4). `bash install.sh --no-vault` installs the plugin alone,
 deliberately.
+
+Keep the vault out of Documents and off synced or shared drives (iCloud, Dropbox, OneDrive,
+Google Drive, Box, network drives): sync tools can rewrite or duplicate files mid-write. The
+installer, `/gt:gt-setup` and `/gt:gt-init` warn when a vault is in one of those places and
+recommend `~/GoldenThread`; it is a warning, not a block.
 
 The installer sets up **`gt`** — memory, projects, session workflow, and enforcement hooks —
 plus each optional **module** that is on:
@@ -42,7 +47,13 @@ plus each optional **module** that is on:
   `bash install.sh --with farm` (or had `/gt:gt-farm` before upgrading)
 
 `bash install.sh --list-modules` shows each one and why it is on or off;
-`--without <name>` leaves one out, and the choice is remembered.
+`--without <name>` leaves one out, and the choice is remembered. To add or update one
+module later without the full install, run `bash install.sh --only <name>`: it asks nothing,
+leaves the vault and every other module alone, and proves that module installed.
+
+New to gt? `/gt:gt-help` opens a First day walkthrough and a guide for each role. If you
+picked a role (a persona), gt offers that role's commands first; it never changes what gt
+enforces.
 
 ---
 
@@ -208,7 +219,7 @@ they just stop outranking live work.
 /gt-flow:gt-flow           ← draw how knowledge climbed the ladder, one offline HTML file (--redact before sharing)
 /gt-visualize:gt-visualize ← explain a codebase in 3D, or draw it as a code city (one offline HTML file)
 /gt-farm:gt-farm           ← route bulk or mechanical tasks to an external AI service as a work packet (farm module, off by default)
-/gt-demo:gt-demo           ← guided tour in a throwaway demo vault, nine acts plus one per module: start / tour / end / clean / remove
+/gt-demo:gt-demo           ← guided tour in a throwaway demo vault, 16 acts plus one per module: start / tour / end / clean / remove
 ```
 
 ---
@@ -254,6 +265,14 @@ On macOS, Linux and WSL2 the operating system enforces it around the assistant's
 native Windows Claude Code has no sandbox, so only the file-tool rules apply: **friction, not a
 boundary**. It does not stop malware running as you. [`SECURITY.md`](SECURITY.md) §8 lists
 exactly what it writes, what it stops and what it does not.
+
+## Optional: connect a service (gt-lotr)
+
+LOTR is gt's gateway to the systems you work in. Turn it on with `bash install.sh --only lotr`,
+restart Claude Code, then say "connect Linear" (or GitHub, Slack, Notion and so on). Claude finds
+the service in the template catalog and runs `lotr setup`: it checks what the service needs,
+tells you where to put the key or sign-in yourself (in your own terminal, never in the chat),
+connects and tests it. `/gt:gt-help` has the details on its Security tab.
 
 ## Adding a knowledge base (gt-wiki)
 

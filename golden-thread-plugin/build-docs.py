@@ -55,6 +55,8 @@ DOCS = [
     ("OBSIDIAN-WORKFLOW.md",   "OBSIDIAN-WORKFLOW.html",   "OBSIDIAN-WORKFLOW.pdf",   "chrome"),
     ("golden-thread-docs.md",  "golden-thread-docs.html",  "golden-thread-docs.pdf",  "chrome"),
     ("SECURITY.md",            "SECURITY.html",            "SECURITY.pdf",            "chrome"),
+    ("FARM-LOCAL-ENGINES.md",  "FARM-LOCAL-ENGINES.html",  "FARM-LOCAL-ENGINES.pdf",  "chrome"),
+    ("TOKEN-SAVINGS.md",       "TOKEN-SAVINGS.html",       "TOKEN-SAVINGS.pdf",       "chrome"),
 ]
 
 # HTML with no markdown source. Never rebuilt -- there is nothing to rebuild from.
@@ -265,7 +267,7 @@ call them by absolute path rather than trusting the probe.
 
   the rest  --  Chrome headless, locally
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \\
-      --headless --disable-gpu --no-pdf-header-footer \\
+      --headless --use-mock-keychain --password-store=basic --disable-gpu --no-pdf-header-footer \\
       --print-to-pdf="$PWD/NAME.pdf" "file://$PWD/NAME.html"
 
   --no-pdf-header-footer is not optional. Chrome's default footer embeds the

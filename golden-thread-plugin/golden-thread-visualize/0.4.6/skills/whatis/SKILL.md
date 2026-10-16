@@ -1,6 +1,6 @@
 ---
 name: whatis
-description: "Answer what one part of a gt-visualize explainer does, at that part's own altitude (actor or gate: its role; box, store or stack: its role, with a step down to its files; file: the file itself), from the part's note, the scenes it appears in and the project's vault pages. Then offers step into, step out to its scene, step over to the next part in its group, and where for a breadcrumb. A part that mixes concerns is reported as an organisation finding. Use when the user says: what is this part, what does this part do, whatis, what is this box in the explainer, explain this part of the story, where does this part sit in the explainer."
+description: "Answer what one part of a gt-visualize explainer does, at its own altitude, from its note, its scenes and the vault, then offer step into, out or over. Use when the user says: what is this part, what does this part do, whatis, what is this box in the explainer, where does this part sit in the explainer."
 plain:
   - cmd: "/gt-visualize:whatis"
     does: "Explains what one part of an explainer is and does."

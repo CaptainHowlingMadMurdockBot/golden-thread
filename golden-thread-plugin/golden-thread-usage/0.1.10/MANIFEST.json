@@ -1,0 +1,22 @@
+{
+ "files": {
+  "hooks/hooks.json": {
+   "bytes": 668,
+   "sha256": "326f8e02dd4f77fa175d15162333f025eae04f5955f72824b08b394c1c1494d8"
+  },
+  "scripts/gt_savings.py": {
+   "bytes": 99880,
+   "sha256": "4612ddd3a09a1d51eebcb8d57bb587dcd48f1de969587e33a7c9db2650abc7e7"
+  },
+  "scripts/gt_usage.py": {
+   "bytes": 26826,
+   "sha256": "1e4c96e3422f5b35f19c3bc8dcec9b7641c7c2f1c3cf92bb200b5a3b23fbf27e"
+  },
+  "scripts/gt_usage_brief.py": {
+   "bytes": 9006,
+   "sha256": "bd0fc2c9a7ee792b95394bb4183022f2dfcaccc1a38bf739331b93c4c0e7e104"
+  }
+ },
+ "generated": "2026-10-16T16:39:26",
+ "version": "0.1.10"
+}

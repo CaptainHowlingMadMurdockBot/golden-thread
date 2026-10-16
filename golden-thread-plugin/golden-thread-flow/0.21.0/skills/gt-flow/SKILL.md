@@ -1,6 +1,6 @@
 ---
 name: gt-flow
-description: "Draw how knowledge moved through the vault over time: one lane per project, time left to right, an arrow each time an item climbed the ladder (session, memory, research/decisions/design, Knowledge, global-memory, Core). Renders one self-contained offline HTML file from the event stream, filterable by project and kind. Use when the user says: show how knowledge moved, visualize the vault, flow view, show the flow, knowledge timeline, how did this project's knowledge climb, draw the promotions, show me the ladder over time."
+description: "Draw how knowledge moved through the vault over time: one lane per project, an arrow each time an item climbed the ladder, as one filterable offline HTML file. Use when the user says: show how knowledge moved, visualize the vault, flow view, knowledge timeline, draw the promotions, show me the ladder over time."
 plain:
   - cmd: "/gt-flow:gt-flow"
     does: "Draws how knowledge moved through your vault over time."

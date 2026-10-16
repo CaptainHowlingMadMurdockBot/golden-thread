@@ -17,14 +17,14 @@
    "sha256": "9285d345da1ab1d90767671e6b0a732d52e9d92768b314d8ab48c05e47548b32"
   },
   "templates/wiki-CLAUDE.md": {
-   "bytes": 1776,
-   "sha256": "7fc3dbfc6a64cdc40fba8c8da8ef8b7be59a1ad5fa51060b15ac002674a0e520"
+   "bytes": 1801,
+   "sha256": "6977157b56eeee34b93f747395f428f7fb448605c0f718c0b865c1a1405f3dc6"
   },
   "templates/wiki-knowledge-template.md": {
    "bytes": 348,
    "sha256": "b69a18d40ce8cdf112106cb345f399ff36c0f061836c5cd76a61bf4249c83f70"
   }
  },
- "generated": "2026-10-08T19:37:43",
+ "generated": "2026-10-15T18:33:07",
  "version": "0.2.9"
 }

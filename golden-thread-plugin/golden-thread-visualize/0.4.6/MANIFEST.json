@@ -1,8 +1,8 @@
 {
  "files": {
   "scripts/gt_visualize.py": {
-   "bytes": 111290,
-   "sha256": "14d82e57b404c20247967d8cea688f90dbd3ec92f0932593d11acb10d28397c2"
+   "bytes": 111583,
+   "sha256": "1331ece1f929e3f444e8f786565d690b30c844dc69cec033bf30b16488500183"
   },
   "scripts/vendor/THREE-LICENSE": {
    "bytes": 1081,
@@ -17,6 +17,6 @@
    "sha256": "84747b01d6856104f9888ffa55707dfbfd5f5c9e2b9fe6c116b21fa993e4c7a6"
   }
  },
- "generated": "2026-10-08T19:37:43",
+ "generated": "2026-10-16T13:34:04",
  "version": "0.4.6"
 }

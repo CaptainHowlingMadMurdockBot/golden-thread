@@ -1,6 +1,6 @@
 ---
 name: gt-watch
-description: "Watch any git repo the user depends on and raise a P0 when it ships a security fix. Commands: add <git-url>, remove <slug>, list, check (fetch now), show <slug> (explain the queued changes), ack [<slug>] (mark seen). Use when the user says: watch a repo, track a repo, follow this library, is anything new upstream, what changed upstream, security fix upstream, stop watching X, mark the watch seen."
+description: "Watch git repos the user depends on and raise a P0 when one ships a security fix. Commands: add, remove, list, check, show, ack. Use when the user says: watch a repo, follow this library, what changed upstream, security fix upstream, stop watching X, mark the watch seen."
 plain:
   - cmd: "/gt-watch:gt-watch"
     does: "Watches a git repository you depend on and raises an alert when it ships a security fix."

@@ -11,7 +11,7 @@ about <YOUR DOMAIN HERE>.
   `remote` (repo URL), and `ingested` (date). For web-only sources, use
   `url` instead of `local`/`remote`. A repo-file source may also carry
   `upstream_sha` — the commit its content was taken from — which gives
-  `/gt:gt-wiki-refresh` an exact diff baseline. A source that replaces an earlier one
+  `/gt-wiki:gt-wiki-refresh` an exact diff baseline. A source that replaces an earlier one
   carries `supersedes:` listing the old source file(s); the old file is
   never touched.
 - **Knowledge/** — LLM-generated wiki pages. Flat directory, no subdirectories.
@@ -32,7 +32,7 @@ creating or updating any Knowledge page.
 ## Workflows
 
 Detailed workflow instructions live in skills:
-- `/gt:gt-wiki-ingest` — ingest new sources
-- `/gt:gt-wiki` — query the wiki
-- `/gt:gt-wiki-refresh` — check sources for upstream changes, supersede on change
-- `/gt:gt-wiki-lint` — health check (script in the gt-wiki plugin)
+- `/gt-wiki:gt-wiki-ingest` — ingest new sources
+- `/gt-wiki:gt-wiki` — query the wiki
+- `/gt-wiki:gt-wiki-refresh` — check sources for upstream changes, supersede on change
+- `/gt-wiki:gt-wiki-lint` — health check (script in the gt-wiki plugin)

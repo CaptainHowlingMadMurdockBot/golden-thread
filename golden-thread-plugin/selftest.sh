@@ -146,11 +146,18 @@ while IFS= read -r cmd; do
       if speaks "$out" additionalContext && grep -q 'CORE RULES' <<<"$out"; then
         ok "SessionStart $name injects the Core rules"
       else bad "SessionStart $name gave no Core rules: $out"; fi ;;
-    gt_components.py|gt_workers.py|gt_version_check.py|gt_push_check.py)
-      # The four startup checks. Each has something true to say about ANY home,
-      # a fresh one included, so silence from these is a real failure.
+    gt_components.py)
+      # The startup line. It has something true to say about ANY home, a fresh one
+      # included, so silence from it is a real failure. Under startup_output compact
+      # (the 0.21.4 default) it also carries version and workers when they are healthy.
       speaks "$out" systemMessage && ok "SessionStart $name emits systemMessage" \
                                   || bad "SessionStart $name said nothing: $out" ;;
+    gt_workers.py|gt_version_check.py|gt_push_check.py)
+      # startup_output compact (0.21.4 default): healthy, these ride on gt_components'
+      # line and say nothing; when they speak it must be a systemMessage.
+      if [ -z "$out" ]; then ok "SessionStart $name silent while healthy (startup_output compact)"
+      elif speaks "$out" systemMessage; then ok "SessionStart $name emits systemMessage"
+      else bad "SessionStart $name spoke without a systemMessage: $out"; fi ;;
     gt_unlock.py)
       # gt unlock (0.20.1) ships OFF, and off it must say nothing and start nothing.
       [ -z "$out" ] && ok "SessionStart $name silent while unlock is off" \
@@ -178,6 +185,13 @@ elif [ -d "$HOME/.claude/plugins/cache/golden-thread-plugin/gt-report-card" ]; t
 else
   ok "report card: module off, not installed (skipped)"
 fi
+
+# A needs_owner hand-off with no clipboard (a Linux CI box, SSH): the command is printed, exit 0,
+# no error (0.21.4). GT_CLIPBOARD_CMD=none forces the branch on a desktop too.
+if out=$(GT_CLIPBOARD_CMD=none python3 "$HOOKS/gt_owner_cmd.py" hand -- echo selftest 2>&1) \
+   && grep -q 'not on your clipboard' <<<"$out" && grep -q 'echo selftest' <<<"$out"; then
+  ok "owner command hand-off prints the command when there is no clipboard"
+else bad "owner command hand-off without a clipboard: $out"; fi
 
 # [source-todo] is a reminder that a NEW project's source.md still has blanks to fill;
 # a fresh scaffold is expected to carry it. Every other finding class is a defect.

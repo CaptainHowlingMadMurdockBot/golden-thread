@@ -3,3 +3,5 @@
 __pycache__/
 *.pyc
 *.pyo
+# A/B harness run output: results, not code (owner 2026-10-16)
+dev/ctx_ab/runs/

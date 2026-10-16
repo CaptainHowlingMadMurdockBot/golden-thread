@@ -1765,7 +1765,10 @@ RECORDS_FILE = os.path.join(_STATE, "visualize-publishes.jsonl")
 TARGET_KEYS = {"github-pages": ("repo", "dir", "base_url")}
 _IPV4 = re.compile(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}"
                    r"(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.])")
-_HOME = re.compile(r"(?:/Users/|/home/|[A-Za-z]:\\\\Users\\\\)[A-Za-z0-9._-]+")
+_HOME = re.compile(r"(?:/Users/|/home/|[A-Za-z]:\\\\Users\\\\)([A-Za-z0-9._-]+)")
+# The one user name that names nobody: "you", the placeholder an example screen uses for the reader
+# (the install guide's /Users/you, C:\Users\you). Owner, 2026-10-16: allow exactly that placeholder.
+_HOME_PLACEHOLDERS = {"you"}
 
 
 def setting(name, allowed, default):
@@ -1835,7 +1838,7 @@ def scrub(page, terms_file=None):
     if ips:
         found.append("%d IPv4 address(es) in the page (e.g. x.x.x.%s) -- replace them with "
                      "role names" % (len(ips), ips[0].rsplit(".", 1)[1]))
-    homes = sorted(set(_HOME.findall(body)))
+    homes = sorted(set(m.group(0) for m in _HOME.finditer(body) if m.group(1) not in _HOME_PLACEHOLDERS))
     if homes:
         found.append("%d home-folder path(s) in the page, which name a user" % len(homes))
     if terms_file:

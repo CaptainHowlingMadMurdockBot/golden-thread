@@ -1,6 +1,6 @@
 ---
 name: gt-wiki-refresh
-description: "Check the user's LLM Wiki sources for upstream changes and supersede outdated ones. Use when the user says: refresh the wiki, check sources for updates, is the wiki still current, update from upstream. Runs on a user-selected subset of sources by default. Vault path via ~/.claude/vault-config.json."
+description: "Check the user's LLM Wiki sources for upstream changes and supersede stale ones (a chosen subset by default). Use when the user says: refresh the wiki, check sources for updates, is the wiki still current. Vault path via ~/.claude/vault-config.json."
 plain:
   - cmd: "/gt-wiki:gt-wiki-refresh"
     does: "Checks whether the wiki's sources changed upstream."

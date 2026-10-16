@@ -1,4 +1,4 @@
-// claude plugin test golden-thread-pane/0.1.0   (Claude Code 2.1.287 or later; no session, no network)
+// claude plugin test golden-thread-pane/0.1.1   (Claude Code 2.1.287 or later; no session, no network)
 import { expect, test } from 'claude-code/testing'
 
 const HOME = '/home/t'
@@ -24,8 +24,10 @@ const BAND = {
 } as const
 
 // Stubs for everything the mod reaches. files: path -> text; returns what was written/submitted/read.
-function world(on: any, files: Record<string, string>, opts: { placed?: boolean; panes?: string[]; noEditor?: boolean } = {}) {
-  const seen = { writes: [] as Array<[string, string]>, submits: [] as string[], reads: [] as string[], opened: [] as any[], closes: 0, logs: [] as string[], runs: [] as string[] }
+// opts.placed: what ui.open answers at session start. opts.recordPlaced: what $.ui.panes() says of the open pane
+// (the engine's record; read at call time, so a test may change it between draws). Left out, the record carries no isPlaced.
+function world(on: any, files: Record<string, string>, opts: { placed?: boolean; panes?: string[]; noEditor?: boolean; recordPlaced?: boolean } = {}) {
+  const seen = { writes: [] as Array<[string, string]>, submits: [] as string[], reads: [] as string[], opened: [] as any[], closes: 0, logs: [] as string[], runs: [] as string[], paneReads: 0 }
   on('env.get', ($: any, e: any) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('fs.exists', ($: any, e: any) => ({ value: e.path in files }))
   on('fs.read', ($: any, e: any) => {
@@ -37,7 +39,10 @@ function world(on: any, files: Record<string, string>, opts: { placed?: boolean;
   on('ui.open', ($: any, e: any) => { seen.opened.push(e); return { value: { isPlaced: opts.placed !== false } } })
   on('ui.close', () => { seen.closes += 1; return { value: undefined } })
   on('ui.log', ($: any, e: any) => { seen.logs.push(e.text); return { value: undefined } })
-  on('ui.panes', () => ({ value: (opts.panes || []).map((id) => ({ id })) }))
+  on('ui.panes', () => {
+    seen.paneReads += 1
+    return { value: (opts.panes || []).map((id) => (typeof opts.recordPlaced === 'boolean' ? { id, isPlaced: opts.recordPlaced } : { id })) }
+  })
   on('command.register', () => ({ value: undefined }))
   on('command.run', ($: any, e: any) => {
     if (e.command === 'gt-pane-buttons') return {}
@@ -179,6 +184,38 @@ test('Update Actions falls back to plain words when the editor command is missin
   await ui.press({ key: 'gt-update-actions' })
   expect(seen.submits.length).toBe(1)
   expect(seen.submits[0]).toMatch(/^Help me update the actions of my gt pane buttons/)
+})
+
+test('Open Help sits below Update Actions and opens the help page', async ($, on) => {
+  const seen = world(on, { [LIST]: listText() })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const ui = await $.ui.mount(PANE())
+  const help = await ui.find({ key: 'gt-open-help' })
+  expect(help).toBeDefined()
+  expect(help.props.label).toBe('Open Help')
+  expect(help.props.hotkey).toBe('h')
+  await ui.press({ key: 'gt-open-help' })
+  expect(seen.runs).toEqual(['gt:gt-help'])
+  expect(seen.submits).toEqual([])
+  expect(seen.writes).toEqual([])
+})
+
+test('Open Help falls back to plain words when the help command is missing', async ($, on) => {
+  const seen = world(on, { [LIST]: listText() }, { noEditor: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const ui = await $.ui.mount(PANE())
+  await ui.press({ key: 'gt-open-help' })
+  expect(seen.submits).toEqual(['Open the gt help page for me.'])
+})
+
+test('Open Help hides while arranging and comes back after', async ($, on) => {
+  world(on, { [LIST]: listText() })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const ui = await $.ui.mount(PANE())
+  await ui.press({ key: 'gt-arrange' })
+  expect(await ui.find({ key: 'gt-open-help' })).toBeUndefined()
+  await ui.press({ key: 'gt-cancel' })
+  expect(await ui.find({ key: 'gt-open-help' })).toBeDefined()
 })
 
 test('Update Actions hides while arranging and comes back after', async ($, on) => {
@@ -335,4 +372,167 @@ test('footer: a subagent\'s turn does not set the cache line', async ($, on) => 
     usage: { model: 'm', input_tokens: 10, cache_read_input_tokens: 980, cache_creation_input_tokens: 10, output_tokens: 5 } } as any)
   const ui = await $.ui.mount(PANE())
   expect(await ui.find({ type: 'Text', text: /^cache/ })).toBeUndefined()
+})
+
+// ---- where the pane really is (0.21.4) -------------------------------------------------------------
+// ui.open answers isPlaced:true at session start, before the terminal is measured, and the side column docks only
+// in the fullscreen renderer. So the answer is provisional; the band decides again once a draw carries a viewport.
+const HINT = /pane docks only in fullscreen \u2014 run \/tui fullscreen/
+
+function BANDV(columns: number, isFullscreen?: boolean) {
+  const viewport: any = { columns, rows: 40 }
+  if (isFullscreen !== undefined) viewport.isFullscreen = isFullscreen
+  return { ...BAND, viewport } as const
+}
+
+test('placement: isPlaced from session.start is provisional, the engine\'s record decides once the window is measured', async ($, on) => {
+  world(on, { [LIST]: listText() }, { placed: true, panes: ['gt'], recordPlaced: false })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(100, true))
+  expect(await band.find({ key: 'gt-0' })).toBeDefined()
+  expect(await band.find({ key: 'gt-11' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: HINT })).toBeUndefined()
+})
+
+test('placement: a pane that waited undrawn at start is picked up when the engine says it is placed', async ($, on) => {
+  world(on, { [LIST]: listText() }, { placed: false, panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160, true))
+  expect(await band.find({ key: 'gt-0' })).toBeUndefined()
+  expect(await band.find({ type: 'Text', text: /^gt/ })).toBeDefined()
+})
+
+test('placement: widening the window re-checks, so the row goes when the pane docks', async ($, on) => {
+  const opts = { placed: true, panes: ['gt'], recordPlaced: false }
+  world(on, { [LIST]: listText() }, opts)
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const narrow = await $.ui.mount(BANDV(100, true))
+  expect(await narrow.find({ key: 'gt-0' })).toBeDefined()
+  await narrow.unmount()
+  opts.recordPlaced = true
+  const wide = await $.ui.mount(BANDV(160, true))
+  expect(await wide.find({ key: 'gt-0' })).toBeUndefined()
+})
+
+test('placement: the engine\'s record is read once per window size, not on every draw', async ($, on) => {
+  const seen = world(on, { [LIST]: listText() }, { panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  for (let i = 0; i < 3; i++) {
+    const band = await $.ui.mount(BANDV(160, true))
+    await band.unmount()
+  }
+  expect(seen.paneReads).toBe(1)
+})
+
+test('placement: a draw of the pane itself proves it is placed, whatever the record said a moment ago', async ($, on) => {
+  world(on, { [LIST]: listText() }, { placed: true, panes: ['gt'], recordPlaced: false })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const before = await $.ui.mount(BANDV(100, true))
+  expect(await before.find({ key: 'gt-0' })).toBeDefined()
+  await before.unmount()
+  const pane = await $.ui.mount(PANE())
+  expect(await pane.find({ key: 'gt-0' })).toBeDefined()
+  const after = await $.ui.mount(BANDV(100, true))
+  expect(await after.find({ key: 'gt-0' })).toBeUndefined()
+})
+
+test('placement: before the window is measured nothing is claimed, the open answer stands', async ($, on) => {
+  const seen = world(on, { [LIST]: listText() }, { placed: true, panes: ['gt'], recordPlaced: false })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const { viewport, ...unmeasured } = BAND as any
+  const band = await $.ui.mount(unmeasured)
+  expect(await band.find({ key: 'gt-0' })).toBeUndefined()
+  expect(await band.find({ type: 'Text', text: HINT })).toBeUndefined()
+  expect(seen.paneReads).toBe(0)
+})
+
+test('classic renderer: the band says the pane docks only in fullscreen, and carries the buttons itself', async ($, on) => {
+  // ui.open said isPlaced:true and so does the engine's record: neither means a dock was drawn
+  world(on, { [LIST]: listText() }, { placed: true, panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160, false))
+  const hint = await band.find({ type: 'Text', text: HINT })
+  expect(hint).toBeDefined()
+  expect(hint.props.dimColor).toBe(true)
+  expect(hint.children.join('')).toBe('gt \u00b7 pane docks only in fullscreen \u2014 run /tui fullscreen')
+  expect(await band.find({ key: 'gt-0' })).toBeDefined()
+  expect(await band.find({ key: 'gt-11' })).toBeDefined()
+})
+
+test('classic renderer: the hint is a line of its own, so the first band line is the one it always was', async ($, on) => {
+  world(on, { [LIST]: listText() }, { panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(100, false))
+  const first = await band.find({ type: 'Text', text: /^gt \u00b7 press a button/ })
+  expect(first).toBeDefined()
+  expect(first.children.join('')).not.toMatch(/fullscreen/)
+})
+
+test('fullscreen renderer: docked and placed, no hint and no row', async ($, on) => {
+  world(on, { [LIST]: listText() }, { panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160, true))
+  expect(await band.find({ type: 'Text', text: HINT })).toBeUndefined()
+  expect(await band.find({ key: 'gt-0' })).toBeUndefined()
+})
+
+test('renderer not reported: no hint is given, only the placement decides', async ($, on) => {
+  world(on, { [LIST]: listText() }, { panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160))
+  expect(await band.find({ type: 'Text', text: HINT })).toBeUndefined()
+  expect(await band.find({ key: 'gt-0' })).toBeUndefined()
+})
+
+test('classic renderer, pane_at_start closed: no pane is open, so no hint', async ($, on) => {
+  world(on, { [LIST]: listText(), [CONFIG]: JSON.stringify({ pane_at_start: 'closed' }) })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160, false))
+  expect(await band.find({ type: 'Text', text: HINT })).toBeUndefined()
+  expect(await band.find({ key: 'gt-0' })).toBeUndefined()
+})
+
+test('classic renderer, pane_at_start off: the band is left to Claude Code, no hint', async ($, on) => {
+  world(on, { [LIST]: listText(), [CONFIG]: JSON.stringify({ pane_at_start: 'off' }) })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160, false))
+  expect(await band.find({ type: 'Text', text: HINT })).toBeUndefined()
+})
+
+test('classic renderer, /gt-pane-buttons opens the pane by hand: the hint shows then, and goes when it is closed', async ($, on) => {
+  const opts = { panes: [] as string[], recordPlaced: true }
+  world(on, { [LIST]: listText(), [CONFIG]: JSON.stringify({ pane_at_start: 'closed' }) }, opts)
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  await toggle($)
+  opts.panes = ['gt']
+  const open = await $.ui.mount(BANDV(160, false))
+  expect(await open.find({ type: 'Text', text: HINT })).toBeDefined()
+  await open.unmount()
+  await toggle($)
+  const closed = await $.ui.mount(BANDV(160, false))
+  expect(await closed.find({ type: 'Text', text: HINT })).toBeUndefined()
+  expect(await closed.find({ key: 'gt-0' })).toBeUndefined()
+})
+
+test('classic renderer: a damaged list is named in the band, because the pane is not on screen to say it', async ($, on) => {
+  world(on, { [LIST]: '{ broken' }, { panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160, false))
+  expect(await band.find({ type: 'Text', text: /^gt \u00b7 buttons\.json:/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: HINT })).toBeDefined()
+  expect(await band.find({ key: 'gt-0' })).toBeUndefined()
+})
+
+test('docked: a damaged list is left to the pane\'s red line, the band does not repeat it', async ($, on) => {
+  world(on, { [LIST]: '{ broken' }, { panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount(BANDV(160, true))
+  expect(await band.find({ type: 'Text', text: /buttons\.json:/ })).toBeUndefined()
+})
+
+test('the desktop app is never told to run /tui fullscreen', async ($, on) => {
+  world(on, { [LIST]: listText() }, { panes: ['gt'], recordPlaced: true })
+  await $.session.start({ surface: 'desktop', isInteractive: true, cwd: '/work' })
+  const band = await $.ui.mount({ ...BANDV(120, false), surface: 'desktop' } as any)
+  expect(await band.find({ type: 'Text', text: HINT })).toBeUndefined()
 })

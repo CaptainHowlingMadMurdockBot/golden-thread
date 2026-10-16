@@ -3,7 +3,7 @@
 > **Reader:** installing for the first time, or verifying a fork
 > **Claims last checked against the code:** 2026-10-04 (0.20.1) — see *The documents, and what belongs in each* in [`CLAUDE.md`](../CLAUDE.md).
 
-**Requirements:** Python 3.8+, Claude Code (any version; 2.1.136 or newer uses the plugin hook route, 2.1.296 or newer is needed for the gt pane; below it the pane is neither asked about nor installed).
+**Requirements:** Python 3.8+, Claude Code (any version; 2.1.136 or newer uses the plugin hook route, 2.1.290 or newer is needed for the gt pane; below it the pane is neither asked about nor installed).
 
 ---
 
@@ -45,7 +45,7 @@ The plugin lives in the `golden-thread-plugin/` subdirectory of the
 ```bash
 git clone git@github.com:shaven/golden-thread.git
 cd golden-thread/golden-thread-plugin
-bash install.sh --vault ~/Documents/GoldenThread
+bash install.sh --vault ~/GoldenThread
 ```
 
 `--vault` is what makes this one step instead of two. A **vault** is a plain folder of
@@ -56,15 +56,28 @@ everything.
 
 | You have | Run |
 |---|---|
-| no vault yet | `bash install.sh --vault ~/Documents/GoldenThread` |
+| no vault yet | `bash install.sh --vault ~/GoldenThread` |
 | an existing vault or Obsidian folder | `bash install.sh --vault /path/to/it` — nothing existing is overwritten |
-| no idea yet | `bash install.sh` — at a terminal it asks; answer or skip |
+| no idea yet | `bash install.sh` — at a terminal it asks; headless it uses `~/GoldenThread` |
 | a deliberate reason for none | `bash install.sh --no-vault` |
 
+**Where the vault lives (0.21.4).** Keep it in a plain local folder: `~/GoldenThread`
+(`%USERPROFILE%\GoldenThread` on Windows). gt writes into its vault constantly, and two kinds
+of place go wrong once the vault is large: the **Documents** folder, which macOS (folder-access
+prompts, iCloud Desktop & Documents) and Windows (Controlled Folder Access, OneDrive folder
+backup) guard, and a **synced or shared drive** (iCloud Drive, Dropbox, OneDrive, Google
+Drive, Box, an SMB/AFP/NFS share, a network drive), where sync conflicts corrupt it. The
+installer, `/gt:gt-setup` and `/gt:gt-init` warn about such a path in plain words and recommend
+`~/GoldenThread`; at a terminal you confirm or change it. It is a warning, not a refusal: you
+can keep the path. `gt_doctor` shows the same as a `vault-location` WARN (it never changes the
+exit code). Check any path yourself:
+`python3 ~/.claude/golden-thread/hooks/gt_vault_location.py check <path>`.
+
 **If something else is running the installer** — an agent, a script, CI — and no vault
-is configured, it stops with **exit 4** and says what it needs rather than inventing a
-directory and claiming `~/.claude/vault-config.json`. That is a question for a person:
-where should the vault live? Re-run with `--vault` once you know.
+is configured, it sets the vault up at the default, `~/GoldenThread`
+(`%USERPROFILE%\GoldenThread` on Windows), and prints the path on stderr (0.21.4; it used to
+stop with exit 4). Exit 4 is now only for a default that could not be set up. Pass `--vault`
+for another place, or `--no-vault` for none.
 
 At a terminal a new install first asks which modules you want (everything, let me choose, or core
 only). `--all-modules` and `--core-only` answer that question without a terminal, and remembered
@@ -73,9 +86,15 @@ choices are kept like `--with`/`--without`.
 `install.sh` resolves its own paths, so it can be run from anywhere. Run
 `bash install.sh --help` for every option.
 
+**One module, not the whole install (0.21.4).** Once gt is installed, `bash install.sh --only NAME`
+adds or updates a single module (NAME: the module, its plugin, or one of its skills) without the
+questions, the vault work or touching anything else, and ends with a self-proof of that module
+(`--only NAME --check` says what it would do and changes nothing). A later full install ends
+exactly where a fresh one would. See MANUAL.md, *Modules*.
+
 **On Windows** (0.19.2; complete in 0.20.1) run the same installer from Git Bash, or run `install.cmd` from
 cmd.exe, PowerShell or Explorer — it finds Git Bash and hands `install.sh` every argument
-unchanged (`install.cmd --vault C:\Users\you\Documents\GoldenThread`; `/uninstall`, `/check`
+unchanged (`install.cmd --vault C:\Users\you\GoldenThread`; `/uninstall`, `/check`
 and `/?` are understood too). Both need
 [Git for Windows](https://git-scm.com/download/win), which Claude Code on Windows needs anyway,
 and Python 3.8+ from [python.org](https://www.python.org/downloads/) with *Add python.exe to
@@ -139,6 +158,7 @@ tree you have, with each one's state and why; at the time of writing they are:
 | `pane` | `gt-pane` | asked (0.21.0) | `/gt-pane:gt-pane` and `/gt-pane-buttons`: a 28-column pane of 12 plain-words buttons you can reorder, rename, add and remove (Claude Code 2.1.296 or newer; below it the module is off and the question is not asked) |
 | `farm` | `gt-farm` | **off** | `/gt-farm:gt-farm`, work packets for an external AI service |
 | `lotr` | `gt-lotr` | **off** | `/gt-lotr:gt-lotr`, one MCP gateway in front of GitHub, Jira, Microsoft 365 and others |
+| `workflow` | `gt-workflow` | **off** | `/gt-workflow:gt-workflow` (short form `/gt-workflow NAME`), saved chains of steps you own and run by name: gt tools, LOTR calls, a local engine, and the steps that wait for you or Claude |
 
 `farm` is off for a fresh install. A machine upgrading from a gt that shipped `/gt:gt-farm`
 keeps it on: a one-time machine migration records that choice, so nobody loses a command
@@ -150,7 +170,7 @@ that is on. To choose:
 ```bash
 bash install.sh --list-modules        # each module, whether it is on, and why
 bash install.sh --without demo        # remove it completely; the choice is remembered
-bash install.sh --with farm           # add one that is off
+bash install.sh --with farm           # add one that is off (workflow and lotr are off too)
 ```
 
 The choice lives in `~/.claude/golden-thread/install-choices.json` and later installs keep it.
@@ -309,7 +329,7 @@ the choice. A hook is wired once under either route. **Upgrading from 0.20.5** m
 The installer does not turn it on; it ends by saying it is off and how to turn it on. What it
 touches when you do:
 
-* `~/.claude/golden-thread/hooks/gt_unlock*.py`, `gt_unlockd*.py`, `gt_ipc.py`, `gt_lock.py`,
+* `~/.claude/golden-thread/hooks/gt_unlock*.py`, `gt_unlockd*.py`, `gt_ipc.py`, `gt_tty.py`, `gt_vault_location.py`, `gt_lock.py`,
   `qrcodegen.py` (+ its MIT licence) — copied on every install, run only when unlock is on or
   you call them. Two hook registrations (`gt_unlock.py hook session-start|session-end`) return
   at once when unlock is off.
@@ -390,7 +410,7 @@ skip to creating a project. Otherwise, open any Claude Code session and type:
 ```
 
 Claude will walk you through:
-1. Choosing a vault path (default: `~/Documents/Obsidian/GoldenThreadVault`)
+1. Choosing a vault path (default: `~/GoldenThread`)
 2. Entering your domain/team name
 3. Wiring the vault to your current project
 

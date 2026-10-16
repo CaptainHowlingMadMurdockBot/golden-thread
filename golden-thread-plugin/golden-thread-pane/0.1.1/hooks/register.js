@@ -9,7 +9,7 @@
 import {
   hotkeyFor, parseButtons, serializeButtons, parseSetting, parseStatusSetting,
   parsePersonas, personaSeed, fitLabel, arrangeStart, arrangeReduce, bandLine, newestReading, latestReading,
-  usageFooter, sessionLines, footerPlan, CLOSE_TIP, shouldShowTip, serializeTipState,
+  usageFooter, sessionLines, footerPlan, CLOSE_TIP, shouldShowTip, serializeTipState, placementPlan, FULLSCREEN_HINT,
 } from './pane_core.js'
 
 const PANE = 'gt'
@@ -17,13 +17,22 @@ const WIDTH = 28                     // columns asked for when docked beside the
 const FOOTER_EVERY_MS = 5000         // never read the usage file twice inside this
 const EDITOR = 'gt-pane:gt-pane'     // Update Actions runs this: the skill that changes the buttons
 const EDITOR_WORDS = 'Help me update the actions of my gt pane buttons: show my buttons and ask which one to change.'
+const HELP = 'gt:gt-help'           // Open Help runs this: the offline help page for your role
+const HELP_WORDS = 'Open the gt help page for me.'
 
 let setting = 'open'                 // pane_at_start: open | closed | off
 let statusSetting = 'on'             // pane_status: on | off
 let buttons = []
 let problem = ''
 let isOpen = false
-let narrow = false                   // the pane could not be placed: the band carries the buttons
+// Where the pane really is (0.21.4). ui.open answers isPlaced:true at session start, before Claude Code has
+// measured the terminal, and the side column docks only in the fullscreen renderer; so what ui.open said is
+// provisional. Once a draw carries a viewport the engine's record is read again, and the band decides
+// (placementPlan) whether it must carry the buttons itself and say that the pane docks only in fullscreen.
+let placed = true                    // ui.open's answer until the viewport is known, then the engine's record
+let viewport = null                  // e.viewport of the last draw that had one: {columns, rows, isFullscreen?}
+let surface = ''                     // e.surface of that draw
+let checkedFor = ''                  // the window the engine's record was last read for
 let arrange = null                   // arrangeStart(...) while arranging, else null
 let footer = null                    // {lines, text, stale} or null
 let footerAt = 0
@@ -137,14 +146,34 @@ async function openPane($, byPerson) {
   const spec = { id: PANE, title: 'gt', columns: WIDTH, closeOnEscape: true }
   const r = await $.ui.open(byPerson ? { ...spec, focus: true } : spec)
   isOpen = true
-  narrow = !r.isPlaced
+  placed = !!r.isPlaced              // provisional: settlePlacement() checks it once the window is measured
+  checkedFor = ''
   $.ui.invalidate('ui.render')
+}
+
+// Read the engine's own record of the pane once a draw carries a viewport, and again when the window
+// changes size (an unasked pane waiting undrawn is seated when the terminal widens). Not on every draw.
+async function settlePlacement($, e) {
+  const v = e && e.viewport
+  if (!v || typeof v.columns !== 'number') return
+  viewport = v
+  surface = e.surface
+  if (!isOpen) return
+  const key = surface + ':' + v.columns + ':' + v.isFullscreen
+  if (key === checkedFor) return
+  checkedFor = key
+  try {
+    const mine = (await $.ui.panes()).find((p) => p.id === PANE)
+    if (mine && typeof mine.isPlaced === 'boolean') placed = mine.isPlaced
+  } catch (err) {
+    // no record to read: ui.open's answer stands
+  }
 }
 
 async function closePane($) {
   await $.ui.close({ id: PANE })
   isOpen = false
-  narrow = false
+  placed = true
   arrange = null
   $.ui.invalidate('ui.render')
 }
@@ -173,7 +202,7 @@ export function register(on) {
         try {
           await openPane($, false)
         } catch (err) {
-          narrow = true
+          placed = false
         }
       }
     } catch (err) {
@@ -221,7 +250,7 @@ export function register(on) {
   on('ui.close', async ($, e, next) => {
     if (e.id !== PANE) return next(e)
     isOpen = false
-    narrow = false
+    placed = true
     arrange = null
     const r = await next(e)
     try {
@@ -234,6 +263,12 @@ export function register(on) {
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE || setting === 'off') return next(e)
+    if (!placed) {
+      // Claude Code raises this draw only for a pane it has seated: if the record said otherwise a moment
+      // ago, the record was stale. Once, so the band stops carrying the buttons.
+      placed = true
+      $.ui.invalidate('ui.render')
+    }
     const { Box, Text, Button } = $.ui.resolve(e)
     if (problem) return Text({ color: 'red', children: [problem] })
     try {
@@ -245,7 +280,8 @@ export function register(on) {
     const redraw = () => $.ui.invalidate('ui.render')
     const rows = arrange ? arrangeRows({ Box, Text, Button }, cols, redraw) : buttons.map((b, i) => card({ Box, Button }, $, b, i, cols))
     const foot = footerRow({ Text })
-    const tail = arrange ? arrangeControls({ Box, Button }, $, redraw) : [openArrange({ Button }, redraw), updateActions({ Button }, $)]
+    const tail = arrange ? arrangeControls({ Box, Button }, $, redraw)
+      : [openArrange({ Button }, redraw), updateActions({ Button }, $), openHelp({ Button }, $)]
     return Box({ flexDirection: 'column', children: [...rows, ...tail, ...foot] })
   })
 
@@ -253,14 +289,22 @@ export function register(on) {
     if (setting === 'off') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const theirs = await next(e)
+    try {
+      await settlePlacement($, e)
+    } catch (err) {
+      // the band still draws from what it knew
+    }
+    const plan = placementPlan({ open: isOpen, surface, viewport, placed })
     const note = Text({
       dimColor: true,
-      children: [bandLine({ problem: isOpen ? '' : problem, open: isOpen, arranging: !!arrange })],
+      children: [bandLine({ problem: isOpen && !plan.narrow ? '' : problem, open: isOpen, arranging: !!arrange })],
     })
-    const row = narrow && isOpen && !problem && buttons.length > 0
+    // the pane's own red line is not on screen when the buttons ride in the band, so the band names the problem
+    const hint = plan.hint ? [Text({ dimColor: true, wrap: 'truncate-end', children: [FULLSCREEN_HINT] })] : []
+    const row = plan.narrow && isOpen && !problem && buttons.length > 0
       ? [Box({ flexDirection: 'row', columnGap: 2, flexWrap: 'wrap', children: buttons.map((b, i) => press({ Button }, $, b, i, false)) })]
       : []
-    return Box({ flexDirection: 'column', children: [note, ...row, theirs] })
+    return Box({ flexDirection: 'column', children: [note, ...hint, ...row, theirs] })
   })
 }
 
@@ -324,6 +368,24 @@ function updateActions({ Button }, $) {
         await $.command.run({ command: EDITOR })
       } catch (err) {
         await $.prompt.submit({ text: EDITOR_WORDS, asUser: true })
+      }
+    },
+  })
+}
+
+// Open Help (owner, 2026-10-16): below Update Actions, it opens /gt:gt-help, the offline help page
+// for the user's role. Fixed like Arrange and Update Actions, so it never takes one of the 12
+// buttons; as there, a session with no command of that name gets the same request as plain words.
+function openHelp({ Button }, $) {
+  return Button({
+    key: 'gt-open-help',
+    label: 'Open Help',
+    hotkey: 'h',
+    onPress: async () => {
+      try {
+        await $.command.run({ command: HELP })
+      } catch (err) {
+        await $.prompt.submit({ text: HELP_WORDS, asUser: true })
       }
     },
   })

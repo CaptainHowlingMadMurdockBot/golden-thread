@@ -1,6 +1,6 @@
 ---
 name: trace
-description: "Run one scene (or the scene that focuses one part) of a gt-visualize explainer forward, one hop at a time, with a prediction pause before each reveal, grounded in a real test of that path when one exists; with no runnable path it is a clearly labelled STATIC walkthrough of types and control flow with no invented values. Ends with a hop table and offers to add a scenario test, writing it only on the user's yes. Use when the user says: trace this scene, trace this part, trace the scene forward, follow the hops, trace the request path through the explainer, run this scene forward hop by hop."
+description: "Run one gt-visualize explainer scene forward hop by hop, with a prediction pause before each reveal, grounded in a real test when one exists (else a labelled STATIC walkthrough). Use when the user says: trace this scene, trace this part, follow the hops, trace the request path through the explainer, run this scene forward hop by hop."
 plain:
   - cmd: "/gt-visualize:trace"
     does: "Follows one path through an explainer one hop at a time."
