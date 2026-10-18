@@ -11,6 +11,34 @@ release's own summary line, kept short rather than reconstructed after the fact.
 
 ---
 
+## gt 0.21.6 — 2026-10-17
+
+The savings report now records data for more of its rows, and four figures it computed are corrected.
+
+- **Added: three more rows of the savings report now record data from normal use.** Every figure
+  is `estimated`, and each recorded line names how it was worked out.
+  - *Huge pastes held back:* a paste that gt holds back records the tokens kept out of the
+    conversation; sending the same text again cancels that saving.
+  - *Context nudge and auto-compact:* when a session's context drops below the point where the
+    nudge fired, the drop is recorded as the re-reads it avoids over the next ten turns.
+  - *gt-minimize / compact timing:* the same drop, counted here when the session asked
+    `/gt:gt-minimize compact` in the half hour before it.
+- **Fixed: `/gt:gt-handle handoff` and `gt_handoff_status.py list --project` stopped with
+  "No module named gt_spool"** on an installed gt. It now finds the vault's own copy.
+- **Fixed: local vault answers reported "gt-farm is not installed"** when gt ran from the
+  marketplace folder. It now finds gt-farm in either install layout.
+- **Fixed: the spill saving was understated.** It measured the output after hidden lines were
+  masked; it now measures the output as it was.
+- **Fixed: the expiry guard counted a cut as a saving when it could not tell whether the cache was
+  still warm.** An unknown cache state now books the cold figure, so the Expiry guard row can
+  read lower than before.
+
+### How this release was tested
+
+- **Mac (macOS 26):** the full suite, 9,104 tests, all passing, with clean secrets and code scans.
+- **Windows 11 VM:** the full suite, 9,093 tests, all passing.
+- **Linux (Amazon Linux 2023 VM):** the full suite, 9,093 tests, all passing, with clean secrets and code scans.
+
 ## gt 0.21.5 — 2026-10-16
 
 The install guide in `/gt:gt-help` now names the vault folder gt actually suggests.
