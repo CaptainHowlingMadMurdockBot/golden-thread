@@ -213,7 +213,7 @@ python3 <scripts>/vault_init.py install-core-rules --vault <vault>
 ### Standing behaviour: parallel work, and the gates
 
 These shipped earlier and are all on by default. They surprise people the
-first time, so they are written down here rather than only in the changelog.
+first time, so they are written down here.
 
 ---
 
@@ -711,7 +711,7 @@ archetypes, a research run (`/gt-lotr:gt-lotr-research`) and an execution run (`
 template catalog released separately from gt (`lotr template update`). Windows fixes include three
 security fixes (terminal-presence guards, single-use action tokens, Git Bash paths in the paranoid
 guard). 0.21.3 added the install from the Claude prompt (`/gt:gt-setup`) and capture-then-compact
-for idle sessions. See the [CHANGELOG](../CHANGELOG.md).
+for idle sessions.
 
 ### 0.21.0
 
@@ -722,7 +722,7 @@ action tokens and I/O brokers; a token profile; the gt pane; `/gt:gt-help`.**
 `--answers FILE`); off a terminal a new install with a security question unanswered exits 5.
 Hooks come from each plugin's `hooks/hooks.json` on Claude Code 2.1.136 or newer. **Breaking:**
 `/gt:gt-close` now closes the session; completing a project, task or handoff is `/gt:gt-complete`.
-See the [CHANGELOG](../CHANGELOG.md), [INSTALL.md](INSTALL.md) and [SECURITY.md](SECURITY.md) section 10.
+See [INSTALL.md](INSTALL.md) and [SECURITY.md](SECURITY.md) section 10.
 
 ### 0.20.4
 
@@ -783,7 +783,7 @@ After installing, restart and run `/gt:gt-upgrade`.
 
 ### 0.18.1
 
-**0.18.1 had thirteen themes**; what changed and why is in the CHANGELOG, how to use each in the
+**0.18.1 had thirteen themes**; how to use each in the
 MANUAL. **One verb per action:** `gt-create`, `gt-open`, `gt-list`, `gt-handle` and the new
 `gt-complete` take the artifact (project, task, handoff) as their argument; the six old task and
 handoff skills still work through 0.18.x as deprecated aliases. **A coding loop:** `gt-plan`
@@ -806,7 +806,7 @@ opt-in `execution` member. **Staged ingest and promote:** `gt_ingest_pipeline.py
 
 Earlier: **0.17.11** made Core rule 1 queue-first (every vault write goes through the write
 queue) and added the optional `gt-lotr` module; **0.17.2** added surfacing at session start and
-the task and handoff skills. Every release is in the [CHANGELOG](../CHANGELOG.md).
+the task and handoff skills.
 
 ### 0.17.0
 

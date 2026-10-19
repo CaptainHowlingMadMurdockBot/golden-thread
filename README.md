@@ -19,120 +19,6 @@ Plugin **v0.21.6**. Ten Core rules currently enforced, five of them *validated* 
 hook inspects the finished reply (`Stop`) or the tool call about to run (`PreToolUse`)
 and blocks it if the rule was broken.
 
-## Install
-
-New to the terminal? The [animated install guide](https://htmlpreview.github.io/?https://github.com/shaven/golden-thread/blob/main/golden-thread-plugin/golden-thread/0.21.6/help/artifacts/install-guide.html) walks from a bare Mac or Windows PC to a first session, one screen per step.
-
-**From inside Claude Code (no terminal):**
-
-```
-/plugin marketplace add shaven/golden-thread
-/plugin install gt-all@golden-thread-plugin
-```
-
-`gt-all` installs gt and every module in one step (use `gt@golden-thread-plugin` for gt alone).
-Restart Claude Code, and the first session says gt is not set up yet: run `/gt:gt-setup`. It asks, in
-the prompt, whether to install everything (recommended), choose modules or keep core only, then the
-security level and where your vault lives, and runs the installer for you.
-
-**Or from a terminal:**
-
-```bash
-bash golden-thread-plugin/install.sh --vault <path>
-# then restart Claude Code — plugins and hooks load at session start
-```
-
-At a terminal a new install asks the same first question; `--all-modules` and `--core-only` answer it.
-Either route installs gt and every **module** that is on. Eleven ship: `wiki`, `demo`,
-`watch`, `report-card`, `flow`, `visualize` and `usage` are on by default; `pane` (new in 0.21.0, the gt button pane) is asked at install; `farm` is off for a
-fresh install and kept on when you upgrade from a gt that had `/gt:gt-farm`; `lotr` (new in
-0.17.11) is off until you ask for it with `--with lotr`; `workflow` (new in 0.21.4, saved chains of steps you run by name) is off until you ask for it with `--with workflow`. Choose with `--list-modules`,
-`--without <name>` and `--with <name>`; the choice is remembered. Re-running it upgrades from any older release to
-the newest, removing what old releases left behind and applying vault upgrades when your
-vault is committed. See the [Install Guide](golden-thread-plugin/INSTALL.md).
-
-Once installed, code in your own projects passes four gates by default before it reaches its
-repository, and gt never pushes — [Default release gates](golden-thread-plugin/MANUAL.md#default-release-gates-what-your-project-passes-before-it-reaches-its-repository):
-
-![Default release gates: tests seen to pass, gt-allin, gt-allin-commit and the commit guard, then your own push](golden-thread-plugin/docs/release-process.svg)
-
-Scaffold a vault, or adopt an existing one:
-
-```bash
-python3 <plugin>/scripts/vault_init.py fresh --vault <path> --domain <name>
-python3 <plugin>/scripts/vault_init.py install-core-rules --vault <path>
-```
-
-**Verify enforcement is live** — a rule that is not wired is not a rule:
-
-```bash
-echo '{}' | ~/.claude/golden-thread/hooks/inject_core_rules.sh
-```
-
-The Core rules should appear. If instead you see `ENFORCEMENT DEGRADED`, the vault
-cannot be reached and the rules are not loaded — the banner names the cause.
-
-## The skills
-
-Thirty-seven skills in gt, plus the skills of its modules (listed after gt's own). Each composes through files rather than through other skills, so
-removing any one leaves the rest working.
-
-| Skill | What it does |
-|---|---|
-| `gt-setup` | Finishes an install from the Claude prompt: asks whether to install everything, choose modules or core only, then the security level and the vault, and runs the installer with those answers. The first session after `/plugin install` says it is needed. |
-| `gt-init` | Sets up the vault and wires it to a project. Writes `vault-config.json`, the pointer every other skill resolves through, and adds the Golden Thread section to your global `CLAUDE.md`. Idempotent — safe to re-run on a new machine. |
-| `gt-create` | Creates a project, a task or a handoff. A project: slug, domain, topology, tags, optional sub-project parent; fills `idea.md` from what you actually said, then freezes it — that file is the traceable *why*, never rewritten when the plan changes. A task: one well-formed line in the project's `## Tasks`, the way a developer drops a TODO, optionally tied to a page or source that must exist. A handoff: what the next session needs, facts labelled with their source and verification state, what changed in the vault this session, and a narrative left blank for the person who did the work — a handoff that reads finished when it is not gives false confidence instead of none. |
-| `gt-open` | Loads a project at session start, reading `source.md` first so you know which host serves which role before touching code. Stops at the memory *index* rather than the notes, so a 70-note project costs ~80 lines to open instead of ~2,000. Names that project's handoffs still waiting, without reading them. After a week away it leads with a generated catch-up paragraph — what was committed, the newest finding, what waits on you. `gt-open handoff` / `gt-open task <id>` open just one of those, read-only. |
-| `gt-work` | Writes the session back: dated findings to `research.md`, stable choices to numbered ADRs in `decisions.md`, architecture rewritten in place in `design.md`, session state to `memory/`. The step people skip, and skipping it is what makes a vault decay. Then it checks its own work: memory notes that contradict each other, findings that look ready to promote, a refreshed research digest, and patterns worth keeping. What did not reach a file it offers to put in a handoff. |
-| `gt-promote` | Graduates a fact up a level once a second project proves it general — or *out* to a project's `CLAUDE.md`, where any agent working in that repo reads it with no vault and no setup. Reach picks the level; audience decides whether it also leaves. |
-| `gt-validate` | Re-derives a claim with a validator given only the claim, the rules and the artifact — never the reasoning that produced it. Four classes: `empirical`, `vantage`, `rule-compliance`, `code`. Returns confirmed, refuted, or cannot-verify, and the third never counts as a pass. |
-| `gt-query` | Answers "how does this work?" — reads `index.md`, follows wikilinks into `Knowledge/`, then falls back to grep and project memory. Flags anything returned that is marked `status: stale`. Also answers "how did we decide X?" (`--lineage`, the chain of ADRs that replaced each other) and "what do we know about X?" (`--entity`). |
-| `gt-ingest` | Imports an existing project's notes. Copies, never moves or deletes. Stores external sources immutably in `Sources/` before synthesising them, so the raw input survives whatever you later conclude from it. |
-| `gt-review` | Empties the inbox: routes each captured-but-unfiled line (INBOX.md, plus daily notes if you keep them) into a tracked project. |
-| `gt-sync` | Keeps the vault in step across machines: shows how far ahead or behind its remote it is, pulls only by fast-forward — stopping, never merging, when both sides have moved — and pushes only after the push check passes. |
-| `gt-refresh` | Checks `Sources/` for upstream changes. Supersedes with a *new* immutable file carrying `supersedes:` rather than editing the old one, so the record of what you believed and when stays intact. |
-| `gt-upgrade` | Updates the VAULT after `install.sh` updates the plugin — the step that did not exist until a 0.11.0 migration had to be run by hand across 43 projects. Migrations detect their own work, documents are three-way merged against a base the vault carries, and a step that needs a person is reported rather than guessed at. |
-| `gt-doctor` | Answers "is this install healthy?" in one command — version, component drift, hook wiring, the vault's release stamp and pending migrations, the scheduled jobs' last exits, stray workers, unpushed commits, publish drift, lint. Every answer is stated relative to the release it was checked against, because a clean report from a check pinned to the wrong version reads exactly like a healthy install. |
-| `gt-lint` | Runs 30 deterministic health checks — broken links, orphans, index gaps, scope leaks, staleness, superseded sources — plus `core-unenforced`, which catches a rule that is stored but never re-asserted, and four that file questions for you: an ADR whose expiry may have come, a page covering two topics, a decision stated in prose with no ADR, a memory note missing its entity tags — and `release-pipeline`, a project that ships code with no release pipeline declared. |
-| `gt-optimize` | Finds what you pay for on every turn and get nothing back for — a fact duplicated across memory files, a dead index row, a `global-memory/` file over budget, a Knowledge page nobody reads — and, since 0.18.1, what your sessions spend rebuilding the prompt cache after sitting idle past its lifetime. Reporting never writes; moving a note somewhere cheaper or archiving old research happens only when asked, and deletes nothing. |
-| `gt-scan` | Checks code against the language definitions this machine actually has — naming and encoding, per language, entirely from packs: a contributed language pack teaches it a new language with no code change. It reports how many checks RAN next to what they found, so a scan that could not load its definitions can never be mistaken for a clean tree. An interrupted scan resumes where it stopped, from any later session. |
-| `gt-allin` | One command for every check, built so a skipped check can never pass for a clean one: the headline is "N of M members ran", and a member that could not execute outranks a member that found something. Since 0.17.2 it also runs the credential scan, the runbook lint and — while gt-wiki is installed — the wiki lint. It does not push — an aggregator is where a partial run is easiest to mistake for a complete one, and pushing there would break the very rule about seeing tests pass that the tool exists to serve. Since 0.18.1 it also runs a project's release pipeline up to the owner gate, where one is adopted. |
-| `gt-context` | Renders what this vault's definitions SAY, for a session to read — the first consumer of the registry's model-reachable tier. Wrapped in an envelope that marks it as data rather than instruction, because a renderer can make content identifiable but cannot make it true. |
-| `gt-validation` | Writes down what a validation established about a file, including what it could NOT determine, stamped with the file's content hash. Edit the file and the recorded definition goes visibly stale — because every serious defect this project has shipped was a claim that outlived its implementation. |
-| `gt-allin-commit` | The separate, deliberate act of committing — kept apart from the sweep so a routine check is never also a write. It verifies a passing test receipt covers every staged file, refuses when a check could not run at all, and stops at the commit: a commit is reversible here, a push is fetched by other people. |
-| `gt-list` | Shows what is waiting without opening anything — handoffs (open, or whose deferral date has come) and open tasks by project, priority, mine, overdue, stale, deferred or ref. Being told must cost no project context. Read-only. |
-| `gt-handle` | Clears what is waiting one item at a time. A task is done, dropped with a reason, deferred to a date (hidden from ranking and escalation until then), moved to another project, or kept; a handoff's items are settled, then it is closed or deferred **to a date**. Nothing is deleted, which is what makes clearing safe. |
-| `gt-complete` | Completes a project, a task or a handoff (0.21.0 breaking: this was `gt-close`). A project is walked to a close: every open item decided, what it learned offered for promotion, then archived in place so every link still resolves (`--move` to relocate it). |
-| `gt-close` | *(0.21.0)* Closes this session, the opposite of `gt-open`: writes back what the session learned and releases its claim on the vault. |
-| `gt-calibrate` | *(0.21.0)* Runs the model calibration pass now and shows keep, move-down, move-up or raise-effort for each agent stage, with the command to apply it. Nothing is applied for you. |
-| `gt-forget` | *(0.21.0)* Retracts a wrong fact in every note that states it, with the reason and the note that now holds the right fact. Nothing is deleted. |
-| `gt-grant` | *(0.21.0)* Lets one command through for a while without lowering your lockdown level. |
-| `gt-help` | *(0.21.0)* An offline page that plays any gt command's real output in a simulated terminal, with a Getting started tab for your role. |
-| `gt-plan` | Writes a phased, test-first plan for a piece of coding work — after restating the requirement and reading the design it touches — and stops at "Approve this plan?". No code until you say yes. |
-| `gt-implement` | Carries out the approved plan one phase at a time: the failing test first, then the code, then the checks, naming the tests that ran. Any red stops it; it commits only on your yes and never pushes. |
-| `gt-brief` | Drafts the section a project's code repository should carry in its `CLAUDE.md` — what it is, the standing decisions, where it runs, what not to do — for a reader with no vault. Printed for review, never written on its own. |
-| `gt-digest` | Reads a big file, a held-back paste or an image for you with the cheapest reader (your own local model, a small helper, or Claude when the file is small) and brings back only the answer, so the text never enters the conversation. |
-| `gt-minimize` | Prunes a heavy session before you cut it: measures it and how long its prompt cache stays warm, keeps the few things worth keeping, and tells you to `/compact` or `/clear` while that is still cheap. |
-| `gt-settings` | Shows and changes everything the plugin does on its own — component drift checking, the version check, orphaned-worker detection, the unpushed-commit check, the session-start MUST DO and handoff surfacing (and where a waiting handoff is shown: every session, only in its project, or only on request), the pre-commit test gate, the parallel-work budget, the protected-path prompt, and the settings each installed module adds (the report card, the close-out question, the upstream watch). Every automatic behaviour is registered here and every one can be switched off. |
-| `gt-route` | Mid-session: names what the session has actually become, says where its output belongs, and checks you are in the right project. For when a session has drifted from what it opened with, or you cannot name what you are doing. |
-| `gt-runbook-lint` | Finds procedures duplicated across project runbooks and routes them to the right shared layer: `PROTOCOL.md`, a `Knowledge/` page, or a repo `CLAUDE.md`. Duplication across two runbooks is the signal a fact belongs one layer out. |
-
-Module skills (each present only while its module is on):
-
-| Skill | Module | What it does |
-|---|---|---|
-| `/gt-watch:gt-watch` | `watch` | Watches any git repo and opens your next session with a P0 when it ships something you need to know about — a security fix, a breaking change. Was `/gt:gt-watch` before 0.15.0. |
-| `/gt-farm:gt-farm` | `farm` | Hands bulk or mechanical work to an external AI service as a self-contained packet with a strict return contract. The packet is identical whether you paste it into a web UI or send it to an API. Was `/gt:gt-farm`; off for a fresh install. |
-| `/gt-workflow:gt-workflow` | `workflow` | Saves a chain of steps you repeat as a workflow (or pipeline) of your own and runs it by name: `/gt-workflow jira-add-to-sprint PROJ-123 sprint="Sprint 42"`. Steps run gt tools, call connected services through LOTR, hand routine work to a local engine, or stop for you or Claude; a write runs on its own only after you approve that exact step, and a send never does. Off by default. |
-| `/gt-flow:gt-flow` | `flow` | Draws how knowledge moved through the vault — one lane per project, an arrow each time an item climbed a level — as one offline HTML file. `--redact` before sharing. |
-| `/gt-visualize:gt-visualize` | `visualize` | Explains a codebase in 3D — a scroll-driven walkthrough whose scenes highlight parts and animate the flows between them, written from the code and the vault — or draws it as an interactive code city — directories as districts, files as buildings; height by lines, colour by language or git churn — as one offline HTML file with three.js inlined. `--redact` before sharing. |
-| `/gt-lotr:gt-lotr` | `lotr` | LOTR, also called gt MCP: one gateway to rule them all. Four fixed MCP tools (`find`, `call_read`, `call_write`, `call_consent`) in front of any number of connections, with a registry of who talks to whom, as whom, from which machine. Credentials are references, never values. Off by default: `install.sh --with lotr`. |
-| `/gt-demo:gt-demo` | `demo` | A guided tour of the whole system against a throwaway vault, so nothing you try touches your own. |
-| `/gt-wiki:gt-wiki` … | `wiki` | Five skills for a standalone LLM wiki: query, ingest, init, lint, refresh. |
-
-The report card (`report-card` module) has no command: it runs at `/compact` and session
-end, and is switched with `/gt:gt-settings`.
-
 ## The commands
 
 The skills are how you talk to Golden Thread in a session. These are the tools it
@@ -230,6 +116,120 @@ different facts and only one of them is reassuring.
 | `gt_surface.py check [--vault V] [--dry-run] [--json]` · `must-do [--vault V]` · `handoffs --project SLUG [--vault V]` | The **reader** for everything above, run at `SessionStart` (0.17.2). Every session: a **MUST DO** block from `<vault>/deadlines.md` — one table, `\| item \| category \| due \| see \|` — overdue 🔴 or due within 14 days 🟡, counted down from the row's date at run time, never stored. Every session until it is handled or deferred to a date: each waiting handoff, one line — path, project, age, open items — never its body (setting `handoff_surface`: `any` by default, `project` for only when `/gt:gt-open` opens that project, `manual` for only on request). Once each: a state file `gt_state.py` wrote; after a compaction the newest goes back to the model in full. **Surfacing is the alarm; the task is the record** — it never creates or closes a task and never writes the vault, only a machine-local "already shown" ledger. A clean start says "nothing waiting". Setting `surface`. |
 | `gt_handoff_status.py list --vault V [--project SLUG] [--all] [--json]` · `mark FILE --vault V --status handled\|open\|deferred [--until YYYY-MM-DD] [--reason TEXT] [--dry-run]` | Whether a handoff is still waiting on someone (0.17.2). `open` keeps surfacing; `deferred` must carry a future `--until` date and is open again on that date ("later, some time" is `handled` with a reason); `handled` is marked by a person **or** follows when every task citing the handoff's filename is checked off; `history` is a pre-0.17.2 handoff with no status, over a week old, with no open citing task — so an upgrade does not resurface every old one. `mark` appends to the handoff's status log. It never loads a handoff's body. |
 
+## The skills
+
+Thirty-seven skills in gt, plus the skills of its modules (listed after gt's own). Each composes through files rather than through other skills, so
+removing any one leaves the rest working.
+
+| Skill | What it does |
+|---|---|
+| `gt-setup` | Finishes an install from the Claude prompt: asks whether to install everything, choose modules or core only, then the security level and the vault, and runs the installer with those answers. The first session after `/plugin install` says it is needed. |
+| `gt-init` | Sets up the vault and wires it to a project. Writes `vault-config.json`, the pointer every other skill resolves through, and adds the Golden Thread section to your global `CLAUDE.md`. Idempotent — safe to re-run on a new machine. |
+| `gt-create` | Creates a project, a task or a handoff. A project: slug, domain, topology, tags, optional sub-project parent; fills `idea.md` from what you actually said, then freezes it — that file is the traceable *why*, never rewritten when the plan changes. A task: one well-formed line in the project's `## Tasks`, the way a developer drops a TODO, optionally tied to a page or source that must exist. A handoff: what the next session needs, facts labelled with their source and verification state, what changed in the vault this session, and a narrative left blank for the person who did the work — a handoff that reads finished when it is not gives false confidence instead of none. |
+| `gt-open` | Loads a project at session start, reading `source.md` first so you know which host serves which role before touching code. Stops at the memory *index* rather than the notes, so a 70-note project costs ~80 lines to open instead of ~2,000. Names that project's handoffs still waiting, without reading them. After a week away it leads with a generated catch-up paragraph — what was committed, the newest finding, what waits on you. `gt-open handoff` / `gt-open task <id>` open just one of those, read-only. |
+| `gt-work` | Writes the session back: dated findings to `research.md`, stable choices to numbered ADRs in `decisions.md`, architecture rewritten in place in `design.md`, session state to `memory/`. The step people skip, and skipping it is what makes a vault decay. Then it checks its own work: memory notes that contradict each other, findings that look ready to promote, a refreshed research digest, and patterns worth keeping. What did not reach a file it offers to put in a handoff. |
+| `gt-promote` | Graduates a fact up a level once a second project proves it general — or *out* to a project's `CLAUDE.md`, where any agent working in that repo reads it with no vault and no setup. Reach picks the level; audience decides whether it also leaves. |
+| `gt-validate` | Re-derives a claim with a validator given only the claim, the rules and the artifact — never the reasoning that produced it. Four classes: `empirical`, `vantage`, `rule-compliance`, `code`. Returns confirmed, refuted, or cannot-verify, and the third never counts as a pass. |
+| `gt-query` | Answers "how does this work?" — reads `index.md`, follows wikilinks into `Knowledge/`, then falls back to grep and project memory. Flags anything returned that is marked `status: stale`. Also answers "how did we decide X?" (`--lineage`, the chain of ADRs that replaced each other) and "what do we know about X?" (`--entity`). |
+| `gt-ingest` | Imports an existing project's notes. Copies, never moves or deletes. Stores external sources immutably in `Sources/` before synthesising them, so the raw input survives whatever you later conclude from it. |
+| `gt-review` | Empties the inbox: routes each captured-but-unfiled line (INBOX.md, plus daily notes if you keep them) into a tracked project. |
+| `gt-sync` | Keeps the vault in step across machines: shows how far ahead or behind its remote it is, pulls only by fast-forward — stopping, never merging, when both sides have moved — and pushes only after the push check passes. |
+| `gt-refresh` | Checks `Sources/` for upstream changes. Supersedes with a *new* immutable file carrying `supersedes:` rather than editing the old one, so the record of what you believed and when stays intact. |
+| `gt-upgrade` | Updates the VAULT after `install.sh` updates the plugin — the step that did not exist until a 0.11.0 migration had to be run by hand across 43 projects. Migrations detect their own work, documents are three-way merged against a base the vault carries, and a step that needs a person is reported rather than guessed at. |
+| `gt-doctor` | Answers "is this install healthy?" in one command — version, component drift, hook wiring, the vault's release stamp and pending migrations, the scheduled jobs' last exits, stray workers, unpushed commits, publish drift, lint. Every answer is stated relative to the release it was checked against, because a clean report from a check pinned to the wrong version reads exactly like a healthy install. |
+| `gt-lint` | Runs 30 deterministic health checks — broken links, orphans, index gaps, scope leaks, staleness, superseded sources — plus `core-unenforced`, which catches a rule that is stored but never re-asserted, and four that file questions for you: an ADR whose expiry may have come, a page covering two topics, a decision stated in prose with no ADR, a memory note missing its entity tags — and `release-pipeline`, a project that ships code with no release pipeline declared. |
+| `gt-optimize` | Finds what you pay for on every turn and get nothing back for — a fact duplicated across memory files, a dead index row, a `global-memory/` file over budget, a Knowledge page nobody reads — and, since 0.18.1, what your sessions spend rebuilding the prompt cache after sitting idle past its lifetime. Reporting never writes; moving a note somewhere cheaper or archiving old research happens only when asked, and deletes nothing. |
+| `gt-scan` | Checks code against the language definitions this machine actually has — naming and encoding, per language, entirely from packs: a contributed language pack teaches it a new language with no code change. It reports how many checks RAN next to what they found, so a scan that could not load its definitions can never be mistaken for a clean tree. An interrupted scan resumes where it stopped, from any later session. |
+| `gt-allin` | One command for every check, built so a skipped check can never pass for a clean one: the headline is "N of M members ran", and a member that could not execute outranks a member that found something. Since 0.17.2 it also runs the credential scan, the runbook lint and — while gt-wiki is installed — the wiki lint. It does not push — an aggregator is where a partial run is easiest to mistake for a complete one, and pushing there would break the very rule about seeing tests pass that the tool exists to serve. Since 0.18.1 it also runs a project's release pipeline up to the owner gate, where one is adopted. |
+| `gt-context` | Renders what this vault's definitions SAY, for a session to read — the first consumer of the registry's model-reachable tier. Wrapped in an envelope that marks it as data rather than instruction, because a renderer can make content identifiable but cannot make it true. |
+| `gt-validation` | Writes down what a validation established about a file, including what it could NOT determine, stamped with the file's content hash. Edit the file and the recorded definition goes visibly stale — because every serious defect this project has shipped was a claim that outlived its implementation. |
+| `gt-allin-commit` | The separate, deliberate act of committing — kept apart from the sweep so a routine check is never also a write. It verifies a passing test receipt covers every staged file, refuses when a check could not run at all, and stops at the commit: a commit is reversible here, a push is fetched by other people. |
+| `gt-list` | Shows what is waiting without opening anything — handoffs (open, or whose deferral date has come) and open tasks by project, priority, mine, overdue, stale, deferred or ref. Being told must cost no project context. Read-only. |
+| `gt-handle` | Clears what is waiting one item at a time. A task is done, dropped with a reason, deferred to a date (hidden from ranking and escalation until then), moved to another project, or kept; a handoff's items are settled, then it is closed or deferred **to a date**. Nothing is deleted, which is what makes clearing safe. |
+| `gt-complete` | Completes a project, a task or a handoff (0.21.0 breaking: this was `gt-close`). A project is walked to a close: every open item decided, what it learned offered for promotion, then archived in place so every link still resolves (`--move` to relocate it). |
+| `gt-close` | *(0.21.0)* Closes this session, the opposite of `gt-open`: writes back what the session learned and releases its claim on the vault. |
+| `gt-calibrate` | *(0.21.0)* Runs the model calibration pass now and shows keep, move-down, move-up or raise-effort for each agent stage, with the command to apply it. Nothing is applied for you. |
+| `gt-forget` | *(0.21.0)* Retracts a wrong fact in every note that states it, with the reason and the note that now holds the right fact. Nothing is deleted. |
+| `gt-grant` | *(0.21.0)* Lets one command through for a while without lowering your lockdown level. |
+| `gt-help` | *(0.21.0)* An offline page that plays any gt command's real output in a simulated terminal, with a Getting started tab for your role. |
+| `gt-plan` | Writes a phased, test-first plan for a piece of coding work — after restating the requirement and reading the design it touches — and stops at "Approve this plan?". No code until you say yes. |
+| `gt-implement` | Carries out the approved plan one phase at a time: the failing test first, then the code, then the checks, naming the tests that ran. Any red stops it; it commits only on your yes and never pushes. |
+| `gt-brief` | Drafts the section a project's code repository should carry in its `CLAUDE.md` — what it is, the standing decisions, where it runs, what not to do — for a reader with no vault. Printed for review, never written on its own. |
+| `gt-digest` | Reads a big file, a held-back paste or an image for you with the cheapest reader (your own local model, a small helper, or Claude when the file is small) and brings back only the answer, so the text never enters the conversation. |
+| `gt-minimize` | Prunes a heavy session before you cut it: measures it and how long its prompt cache stays warm, keeps the few things worth keeping, and tells you to `/compact` or `/clear` while that is still cheap. |
+| `gt-settings` | Shows and changes everything the plugin does on its own — component drift checking, the version check, orphaned-worker detection, the unpushed-commit check, the session-start MUST DO and handoff surfacing (and where a waiting handoff is shown: every session, only in its project, or only on request), the pre-commit test gate, the parallel-work budget, the protected-path prompt, and the settings each installed module adds (the report card, the close-out question, the upstream watch). Every automatic behaviour is registered here and every one can be switched off. |
+| `gt-route` | Mid-session: names what the session has actually become, says where its output belongs, and checks you are in the right project. For when a session has drifted from what it opened with, or you cannot name what you are doing. |
+| `gt-runbook-lint` | Finds procedures duplicated across project runbooks and routes them to the right shared layer: `PROTOCOL.md`, a `Knowledge/` page, or a repo `CLAUDE.md`. Duplication across two runbooks is the signal a fact belongs one layer out. |
+
+Module skills (each present only while its module is on):
+
+| Skill | Module | What it does |
+|---|---|---|
+| `/gt-watch:gt-watch` | `watch` | Watches any git repo and opens your next session with a P0 when it ships something you need to know about — a security fix, a breaking change. Was `/gt:gt-watch` before 0.15.0. |
+| `/gt-farm:gt-farm` | `farm` | Hands bulk or mechanical work to an external AI service as a self-contained packet with a strict return contract. The packet is identical whether you paste it into a web UI or send it to an API. Was `/gt:gt-farm`; off for a fresh install. |
+| `/gt-workflow:gt-workflow` | `workflow` | Saves a chain of steps you repeat as a workflow (or pipeline) of your own and runs it by name: `/gt-workflow jira-add-to-sprint PROJ-123 sprint="Sprint 42"`. Steps run gt tools, call connected services through LOTR, hand routine work to a local engine, or stop for you or Claude; a write runs on its own only after you approve that exact step, and a send never does. Off by default. |
+| `/gt-flow:gt-flow` | `flow` | Draws how knowledge moved through the vault — one lane per project, an arrow each time an item climbed a level — as one offline HTML file. `--redact` before sharing. |
+| `/gt-visualize:gt-visualize` | `visualize` | Explains a codebase in 3D — a scroll-driven walkthrough whose scenes highlight parts and animate the flows between them, written from the code and the vault — or draws it as an interactive code city — directories as districts, files as buildings; height by lines, colour by language or git churn — as one offline HTML file with three.js inlined. `--redact` before sharing. |
+| `/gt-lotr:gt-lotr` | `lotr` | LOTR, also called gt MCP: one gateway to rule them all. Four fixed MCP tools (`find`, `call_read`, `call_write`, `call_consent`) in front of any number of connections, with a registry of who talks to whom, as whom, from which machine. Credentials are references, never values. Off by default: `install.sh --with lotr`. |
+| `/gt-demo:gt-demo` | `demo` | A guided tour of the whole system against a throwaway vault, so nothing you try touches your own. |
+| `/gt-wiki:gt-wiki` … | `wiki` | Five skills for a standalone LLM wiki: query, ingest, init, lint, refresh. |
+
+The report card (`report-card` module) has no command: it runs at `/compact` and session
+end, and is switched with `/gt:gt-settings`.
+
+## Install
+
+New to the terminal? The [animated install guide](https://htmlpreview.github.io/?https://github.com/shaven/golden-thread/blob/main/golden-thread-plugin/golden-thread/0.21.6/help/artifacts/install-guide.html) walks from a bare Mac or Windows PC to a first session, one screen per step.
+
+**From inside Claude Code (no terminal):**
+
+```
+/plugin marketplace add shaven/golden-thread
+/plugin install gt-all@golden-thread-plugin
+```
+
+`gt-all` installs gt and every module in one step (use `gt@golden-thread-plugin` for gt alone).
+Restart Claude Code, and the first session says gt is not set up yet: run `/gt:gt-setup`. It asks, in
+the prompt, whether to install everything (recommended), choose modules or keep core only, then the
+security level and where your vault lives, and runs the installer for you.
+
+**Or from a terminal:**
+
+```bash
+bash golden-thread-plugin/install.sh --vault <path>
+# then restart Claude Code — plugins and hooks load at session start
+```
+
+At a terminal a new install asks the same first question; `--all-modules` and `--core-only` answer it.
+Either route installs gt and every **module** that is on. Eleven ship: `wiki`, `demo`,
+`watch`, `report-card`, `flow`, `visualize` and `usage` are on by default; `pane` (new in 0.21.0, the gt button pane) is asked at install; `farm` is off for a
+fresh install and kept on when you upgrade from a gt that had `/gt:gt-farm`; `lotr` (new in
+0.17.11) is off until you ask for it with `--with lotr`; `workflow` (new in 0.21.4, saved chains of steps you run by name) is off until you ask for it with `--with workflow`. Choose with `--list-modules`,
+`--without <name>` and `--with <name>`; the choice is remembered. Re-running it upgrades from any older release to
+the newest, removing what old releases left behind and applying vault upgrades when your
+vault is committed. See the [Install Guide](golden-thread-plugin/INSTALL.md).
+
+Once installed, code in your own projects passes four gates by default before it reaches its
+repository, and gt never pushes — [Default release gates](golden-thread-plugin/MANUAL.md#default-release-gates-what-your-project-passes-before-it-reaches-its-repository):
+
+![Default release gates: tests seen to pass, gt-allin, gt-allin-commit and the commit guard, then your own push](golden-thread-plugin/docs/release-process.svg)
+
+Scaffold a vault, or adopt an existing one:
+
+```bash
+python3 <plugin>/scripts/vault_init.py fresh --vault <path> --domain <name>
+python3 <plugin>/scripts/vault_init.py install-core-rules --vault <path>
+```
+
+**Verify enforcement is live** — a rule that is not wired is not a rule:
+
+```bash
+echo '{}' | ~/.claude/golden-thread/hooks/inject_core_rules.sh
+```
+
+The Core rules should appear. If instead you see `ENFORCEMENT DEGRADED`, the vault
+cannot be reached and the rules are not loaded — the banner names the cause.
+
 ## What it saves (measured, not claimed)
 
 ![Golden Thread savings: without the Core rules a correct result costs 1.28x; LOTR keeps main-context tokens down by 50% or more](golden-thread-plugin/docs/gt-savings.png)
@@ -305,7 +305,7 @@ named services are included with gt-lotr and also released on their own, in `lot
 > code and the riskiest actions; disk read, network fetch and disk write are brokered; `token_profile` sets
 > seven cost settings at once; `gt-pane` adds a button pane; `/gt:gt-help` shows any command running.
 > **Breaking:** `/gt:gt-close` now closes the session, and `/gt:gt-complete` completes a project, task or
-> handoff. See the [CHANGELOG](CHANGELOG.md).
+> handoff.
 >
 > **0.20.5: configurable lockdown: you choose how much Claude may run without asking.** One setting,
 > `lockdown`, four levels from `very-secure` (the default, exactly 0.20.4) to `insecure`, each a set of
@@ -354,7 +354,7 @@ named services are included with gt-lotr and also released on their own, in `lot
 >   Handoffs get the same pair. Nothing is ever deleted.
 > - **Session claims survive a network change** — keyed on a machine id instead of a hostname.
 > - **Known:** macOS blocks scheduled (launchd) runs from reading a vault under CloudStorage; the
->   health check now says so. Details in the [CHANGELOG](CHANGELOG.md).
+>   health check now says so.
 
 ## Who this is for
 
@@ -437,7 +437,6 @@ alongside the code they describe. Start with Getting Started; the Manual is the 
 
 | Document | What it covers |
 |---|---|
-| [Changelog](CHANGELOG.md) | What changed in each release, newest first |
 | [Announcements](../../discussions/categories/announcements) | Release write-ups: what broke, what changed, and what you have to do |
 | [Getting Started](golden-thread-plugin/ONBOARDING.md) · [PDF](golden-thread-plugin/ONBOARDING.pdf) | A guided first session in six steps, about fifteen minutes |
 | [User Manual](golden-thread-plugin/MANUAL.md) · [PDF](golden-thread-plugin/MANUAL.pdf) | Complete reference: every skill, the vault layout, verification, the promotion ladder |
@@ -453,28 +452,6 @@ alongside the code they describe. Start with Getting Started; the Manual is the 
 
 The PDFs and HTML are rendered from the markdown beside them — when the two disagree,
 **the markdown is the source of truth.**
-
-## How it's tested
-
-<!-- gt:tests:begin -- generated by golden-thread-plugin/dev/help_record.py build; do not edit -->
-**9,117 tests in 358 files**, counted from `golden-thread-plugin/tests/` the way the test runner loads them, each time the help page is built. By kind (sorted by test name, so approximate): 7,067 functionality, 1,577 invalid input, 473 adversarial. These say what is tested, not that a particular run passed; a release ships only on a passing run of all of them.
-
-| Area | Tests | Files | What they check |
-|---|---:|---:|---|
-| Install, upgrade and uninstall | 961 | 45 | A fresh install, an upgrade from any earlier release, a failed install rolled back, and an uninstall that leaves nothing behind, on macOS, Linux and Windows. |
-| Security guards | 1,287 | 47 | The security level, paranoid and its action tokens, gt unlock, sandbox mode, protected paths and the push and commit fingerprints: each refuses what it should and allows what it should. |
-| Secrets | 68 | 4 | No credential is shipped, logged or written into the vault, and the secrets scan finds the ones it must. |
-| LOTR gateway | 1,143 | 31 | The gateway to GitHub, Jira and Microsoft 365: reads stay reads, writes and sends need the right approval, sign-in tokens are handled safely. |
-| File and network brokers | 307 | 8 | The routes an assistant uses to read, write and fetch: limits, allow lists and refusals. |
-| Vault writes and Core rules | 529 | 22 | Every vault write goes through the queue, nothing overwrites another session's work, and the Core rules are injected and checked on every turn. |
-| Docs, help and release checks | 423 | 25 | The manual, this help page and the release notes match the code, and the release gates themselves work. |
-| Modules | 1,291 | 47 | The optional plugins beside gt: each installs, runs and removes cleanly. |
-| Commands and everyday workflows | 3,108 | 129 | Everything else gt does: tasks, handoffs, linting, promotion, scanning, the daily note and the rest of the commands. |
-<!-- gt:tests:end -->
-
-What the tests do not prove: they show gt does what it is meant to in expected use. Some are
-deliberately hostile (red-team tests of gt unlock and of LOTR's sign-in), but this is not an
-independent security audit. [`SECURITY.md`](golden-thread-plugin/SECURITY.md) says what each protection does not stop.
 
 ## Typical use
 
@@ -741,7 +718,7 @@ After installing, restart and run `/gt:gt-upgrade`.
 
 **0.17.11** made every vault write go through the write queue (Core rule 1) and added the
 optional `gt-lotr` gateway; **0.17.10** a write broker and specialist agents; **0.17.3–0.17.5**
-published-copy checksums and install fixes. Details in the [CHANGELOG](CHANGELOG.md).
+published-copy checksums and install fixes.
 
 ### 0.16.2
 
@@ -790,8 +767,7 @@ changes anything you wrote without saying so and asking. Three commands moved
 `/gt:gt-demo` → `/gt-demo:gt-demo`), and the installer tells you. New with it: the vault
 records how knowledge moves as events, and **`/gt-flow:gt-flow` draws it** — see
 [Seeing how knowledge moved](#seeing-how-knowledge-moved). Choose modules with
-`install.sh --list-modules`, `--without <name>` and `--with <name>`; details in the
-[CHANGELOG](CHANGELOG.md).
+`install.sh --list-modules`, `--without <name>` and `--with <name>`.
 
 ### 0.12.5
 
@@ -826,6 +802,28 @@ gt_settings.py set parallel_max 4      # never more than 4 workers, whatever the
 gt_settings.py set parallel_work off   # serial, and the Core rule stops being injected
 gt_settings.py show                    # what is currently allowed
 ```
+
+## How it's tested
+
+<!-- gt:tests:begin -- generated by golden-thread-plugin/dev/help_record.py build; do not edit -->
+**9,117 tests in 358 files**, counted from `golden-thread-plugin/tests/` the way the test runner loads them, each time the help page is built. By kind (sorted by test name, so approximate): 7,067 functionality, 1,577 invalid input, 473 adversarial. These say what is tested, not that a particular run passed; a release ships only on a passing run of all of them.
+
+| Area | Tests | Files | What they check |
+|---|---:|---:|---|
+| Install, upgrade and uninstall | 961 | 45 | A fresh install, an upgrade from any earlier release, a failed install rolled back, and an uninstall that leaves nothing behind, on macOS, Linux and Windows. |
+| Security guards | 1,287 | 47 | The security level, paranoid and its action tokens, gt unlock, sandbox mode, protected paths and the push and commit fingerprints: each refuses what it should and allows what it should. |
+| Secrets | 68 | 4 | No credential is shipped, logged or written into the vault, and the secrets scan finds the ones it must. |
+| LOTR gateway | 1,143 | 31 | The gateway to GitHub, Jira and Microsoft 365: reads stay reads, writes and sends need the right approval, sign-in tokens are handled safely. |
+| File and network brokers | 307 | 8 | The routes an assistant uses to read, write and fetch: limits, allow lists and refusals. |
+| Vault writes and Core rules | 529 | 22 | Every vault write goes through the queue, nothing overwrites another session's work, and the Core rules are injected and checked on every turn. |
+| Docs, help and release checks | 423 | 25 | The manual, this help page and the release notes match the code, and the release gates themselves work. |
+| Modules | 1,291 | 47 | The optional plugins beside gt: each installs, runs and removes cleanly. |
+| Commands and everyday workflows | 3,108 | 129 | Everything else gt does: tasks, handoffs, linting, promotion, scanning, the daily note and the rest of the commands. |
+<!-- gt:tests:end -->
+
+What the tests do not prove: they show gt does what it is meant to in expected use. Some are
+deliberately hostile (red-team tests of gt unlock and of LOTR's sign-in), but this is not an
+independent security audit. [`SECURITY.md`](golden-thread-plugin/SECURITY.md) says what each protection does not stop.
 
 ## Feedback
 
