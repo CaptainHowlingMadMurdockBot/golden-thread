@@ -15,409 +15,13 @@ it at startup, look things up while working, and write back what they learn.
 Its distinguishing idea is the second problem, the one most memory systems never
 address: **writing a rule down does not mean it gets followed.**
 
-Plugin **v0.21.0**. Ten Core rules currently enforced, five of them *validated* — a
+Plugin **v0.21.6**. Ten Core rules currently enforced, five of them *validated* — a
 hook inspects the finished reply (`Stop`) or the tool call about to run (`PreToolUse`)
 and blocks it if the rule was broken.
 
-
-> [!IMPORTANT]
-> **0.21.5:** the install guide in `/gt:gt-help` names the vault folder gt suggests, `~/GoldenThread`.
->
-> **0.21.4:** connect an MCP service in a few steps from a catalog of sixteen templates (say
-> "connect Linear"; `lotr setup`), personas that shape the session as well as new projects, a First
-> day walkthrough and a guide per role in `/gt:gt-help`, `install.sh --only NAME` to add or update
-> one module, and `~/GoldenThread` as the default vault, with a warning for synced or shared drives.
-> Also new: a context nudge and auto-compact, a farm ladder to engines on your own hardware, the
-> optional `gt-workflow` module, a plan's scope checked at every commit, and `lotr pull`.
-
-## What it saves (measured, not claimed)
-
-![Golden Thread savings: without the Core rules a correct result costs 1.28x; LOTR keeps main-context tokens down by 50% or more](golden-thread-plugin/docs/gt-savings.png)
-
-Golden Thread costs tokens: the Core rules are re-sent on every prompt, and the hooks and agents
-add work. It also saves tokens in several ways. The `gt-usage` module keeps a **savings ledger** on
-your machine (from Claude Code's own usage records; nothing is sent anywhere) that puts each saving
-next to its cost. Every figure carries how it was established: *measured*, *estimated* (derived
-from measured inputs), or *design* (a claim no measurement backs yet, never counted in the net).
-
-| Mechanism | What it saves | Evidence |
-|---|---|---|
-| **Core rules** | Rework. Same coding tasks, rules on vs off, every failed run re-prompted until correct: without the rules a correct result cost **1.26×** (weighted by a real model mix), 34/45 runs were right first time vs 44/45 with them, and 7 of 15 replies pasted a live API key vs 0 of 15 | 90-run A/B benchmark on Opus, Sonnet and Haiku, 2026-10-11 (self-verified) |
-| **LOTR gateway** | Tool payloads kept out of the main conversation: 98% fewer main-context tokens over 25 Jira queries | One measured session (measured); details below |
-| **Agents keeping dumps out of context** | A subagent reads the large output and returns a summary; the main session never carries the raw text | Per agent run, from the transcripts (estimated) |
-| **Agent model tiers** | Routine agent work runs on a cheaper model than the session's. The row goes negative when an agent runs on a pricier model than its session, and the ledger shows that too | Per agent run, priced at list (estimated) |
-| **Cache-expiry guard** | Compacts an idle session before its prompt cache expires (in place, inside the open session, since 0.21.2), instead of paying a full cache rebuild | Per cut (estimated) |
-| **Farmed packets (gt-farm)** | Bulk, mechanical work sent to an engine on your own hardware (or another service) instead of Claude; the report shows each engine, local share, throughput and the share of the window's work kept off Claude | Per packet: measured from the engine's usage field, estimated for relayed packets |
-| **Leaks, releases, persona work** | Secret rotations, release re-runs and role-specific rework the rules prevent | Design only, not yet benchmarked, kept out of the net |
-
-On the author's machine over one week the ledger showed the Core rules avoiding about 34 times
-their own token cost (estimated: the benchmark factor applied to measured usage). The graphic uses
-a 50% Opus model mix and shows LOTR at a conservative 50%.
-
-See your own figures with `/gt-usage:gt-usage-savings`. Tokens are the unit; dollars are list price.
-Set `savings_billing api` if your account is billed per token, and the report names them as spend
-avoided; on a subscription they are an equivalent, not a bill.
-
-## One gateway for your MCP servers (LOTR)
-
-![One tool connection, a fraction of the tokens: the same Jira query measured three ways, 98% fewer main-context tokens over 25 queries through LOTR with a specialized agent](golden-thread-plugin/docs/lotr-token-savings.png)
-
-Connecting an MCP server directly to Claude Code costs you twice: every tool's schema is loaded into
-every session whether you use it or not, and every response lands in your conversation in full.
-**LOTR** is Golden Thread's gateway. It sits in front of the MCP servers you connect and changes both
-costs.
-
-Since 0.21.4 LOTR can also front a local MCP server that runs as a program (stdio), and
-`lotr template guide` shows how to write a connection for any service yourself. gt-lotr 0.5.0 makes
-that a few steps: say "connect Linear", paste a key or sign in, done (`lotr setup`). Templates for
-named services are included with gt-lotr and also released on their own, in `lotr-templates/`;
-`lotr template update` refreshes them between releases.
-
-- **One gateway instead of many tool lists.** The session sees LOTR's 4 tools and finds
-  operations on demand. Recent Claude Code already defers MCP tool schemas (names only until a
-  tool is used), so the saving today is mostly the per-server tool-name lists and the servers'
-  own instructions blocks, which LOTR replaces with one short catalog. Our earlier figure (about
-  720 tokens instead of about 7,400) measured full schemas offline with tiktoken on one server,
-  not what deferral leaves in context. Check your own setup with `/context`, direct vs. through
-  the gateway.
-- **Capped responses.** A connected server's answer is capped before it reaches the conversation.
-- **Specialist agents keep the payload out of the conversation.** A domain agent makes the call in
-  its own context and returns only the compact result. In one measured case a 20-ticket query
-  returned 313 tokens to the main context (self-verified, one run). Shipped in 0.20.2 for Jira,
-  Microsoft 365 and GitHub, split into readers (no write tools) and writers (act only on a
-  structured instruction built from your own words).
-- **Native OAuth sign-in** (`lotr connect`). You sign in from your own terminal. The refresh token
-  is sealed when unlock is on, the server's hosts are pinned, and sign-in refuses to run from inside
-  Claude Code. Verified against Linear's live server; Google and Microsoft are tested against fake
-  servers only.
-- **Consent and strict tiers.** Writes that delete, send or merge need consent, raised by the
-  gateway, not by the model, and the prompt says who and what (a mail's recipients, a merge's
-  target). Each call tool carries only its own tier, and MCP tools are rated by name on every
-  connection, so a server's "read-only" hint cannot clear a `delete_*` tool.
-- **See what is connected.** `/gt:gt-settings lotr` shows every connection and whether it works
-  (connected, needs sign-in, error, not used yet), like Claude Code's `/mcp`.
-
-**What it does not do:** it does not stop a process already running as you. See
-[SECURITY.md](golden-thread-plugin/SECURITY.md) for the threat model.
-
-> **0.21.0: the install asks every choice; hooks ship with the plugins.** A new install lists its questions
-> with `install.sh --questions`, security first; `paranoid` and single-use action tokens protect gt's own
-> code and the riskiest actions; disk read, network fetch and disk write are brokered; `token_profile` sets
-> seven cost settings at once; `gt-pane` adds a button pane; `/gt:gt-help` shows any command running.
-> **Breaking:** `/gt:gt-close` now closes the session, and `/gt:gt-complete` completes a project, task or
-> handoff. See the [CHANGELOG](CHANGELOG.md).
->
-> **0.20.5: configurable lockdown: you choose how much Claude may run without asking.** One setting,
-> `lockdown`, four levels from `very-secure` (the default, exactly 0.20.4) to `insecure`, each a set of
-> Claude Code allow rules gt adds to `~/.claude/settings.json` and takes out again. The installer asks;
-> change it with `/gt:gt-settings lockdown <level>`. The levels cut approval prompts and are not a
-> security boundary — see the chart in the [plugin README](golden-thread-plugin/README.md).
->
-> **0.20.4: a fingerprint before every push (Touch ID or Windows Hello) and on every commit (macOS).**
-> `push_fingerprint` asks for it before a push, `push_fingerprint_seal_token` seals the push token behind it so a plain
-> `--no-verify` push still asks, and `commit_fingerprint` signs every commit with a Secure Enclave key, plus a
-> no-bypass GitHub ruleset that refuses unsigned commits on the server. github.com and GitHub Enterprise.
-> (0.20.3 was a beta and was never released.)
->
-> **0.20.2: LOTR connection status, reader/writer domain agents, strict tool tiers, and gt sandbox
-> mode in every skill.** See the [release notes](https://github.com/shaven/golden-thread/releases/tag/v0.20.2).
->
-> **0.20.1: gt unlock and gt sandbox mode (both off by default), and Windows, finished.** Turned on, agents need your
-> presence — TOTP plus Touch ID (macOS) or Windows Hello, optionally Microsoft Entra ID sign-in —
-> before they use LOTR connections, credentials, publishing or gt's own guards. Callers are
-> identified by the kernel, approvals are hardware signatures gt verifies itself, credentials can
-> be sealed under the Secure Enclave / TPM, and `gt_unlock.py verify` prints the level this machine
-> really runs at. *"Unlock proves a person was present and limits what agents can do on their own.
-> It is not anti-malware. If something already runs as you, it can wait for you to unlock."* Read
-> [`SECURITY.md`](golden-thread-plugin/SECURITY.md) before turning it on. **gt sandbox mode** has Claude Code's own sandbox
-> and permission rules keep the assistant's shell and file tools off the vault and gt's state;
-> the vault is read through gt's MCP server and written only through the queue (native Windows:
-> permission rules only — friction, not a boundary). Also: `python3` works in
-> Claude's shell on Windows, every gt write is LF, scheduled jobs run on Task Scheduler, the suite
-> runs on Windows, gt-lotr runs on Windows (0.3.0) with its MCP server started by the installer's
-> Python, and a failed install rolls back. And on a current Claude Code: each pipeline stage is a
-> plugin agent with its own model **and effort** (`gt:extract` … `gt:place`), ingest and promote
-> stages can run as the `gt:pipeline-stage` workflow with schema-checked output, and LOTR's tools
-> declare their result schema; an older Claude Code takes the earlier route. There is no
-> published 0.19.3.
-
-> [!IMPORTANT]
-> **0.19.2: gt installs on native Windows.** Run `install.sh` from Git Bash, or the new
-> `install.cmd` from cmd.exe, PowerShell or Explorer. The installer finds a real Python 3.8+
-> (the Microsoft Store Python does not count, and it says what to install when that is all
-> there is), and the hooks run under Git Bash as Claude Code for Windows runs them. Nothing
-> changes on macOS or Linux. See *Windows* in [`INSTALL.md`](golden-thread-plugin/INSTALL.md).
-
-> [!IMPORTANT]
-> **0.19.1: right-sized models, SSO for LOTR, and fixes from installing 0.18.1.** (There is no
-> published 0.19.0.) **Model and effort per skill:** every skill declares fast/balanced/deep, and the
-> installer writes a profile into the installed copies — `average` (haiku with no effort setting,
-> sonnet·medium, opus·high; a new install's default), `very-high` (opus·xhigh) or `inherit` —
-> with per-skill and per-plugin overrides (`gt_model_policy.py`) and a doctor `model-policy` row;
-> specialist agents run on the model their task needs (`agent_models`, haiku/sonnet/opus by tier).
-> **LOTR handles SSO:** `lotr connect <name> --url <mcp-url>` signs in to an OAuth MCP server from your own
-> terminal (native OAuth, gt-lotr 0.3.0). The refresh token is sealed when unlock is on, the server's hosts are
-> pinned, and sign-in refuses to run from inside Claude Code. Verified live against Linear; Google and Microsoft
-> are tested against fake servers only. `lotr add-mcp` still reuses an existing client's token by reference
-> (gt-lotr 0.2.0). **Recall:** `gt_bench.py recall` measures
-> how often lookup finds the right page; optional prompt hints (`vault_hints`, off by default).
-> **Supersession and expiry** applied when notes are read (`gt_supersede.py`). **Fixes:** the
-> queue guard reads shell tokens and follows `cd`; nothing writes bytecode into the published copy; post-install
-> resolves the installed release from any path and every completed run writes its receipt; one
-> recorded interpreter for every launchd job; the commit gate fits a large repo; the Stop validator
-> no longer demands a timestamp from a turn that was never given one (the install-time alert).
-> After installing, restart and run `/gt:gt-upgrade`.
->
-> **0.18.1: one verb per action, a plan before code, and less to carry.**
->
-> - **One skill per verb.** `/gt:gt-create`, `/gt:gt-open`, `/gt:gt-list`, `/gt:gt-handle` and the
->   new `/gt:gt-close` (0.21.0: `/gt:gt-complete`) take what they act on — a project, a task, a handoff — as their argument.
->   Closing a project walks every open item to a decision, offers what it learned for promotion, and
->   archives it in place. The old task and handoff skill names still work through 0.18.x.
-> - **Plan, then implement.** `/gt:gt-plan` writes a phased, test-first plan and waits for your
->   approval; `/gt:gt-implement` runs it one phase at a time, stops on any red, and commits only
->   when you say so.
-> - **Decisions you can trace.** ADRs can record when they stop being true and what they replaced;
->   "how did we decide X?" prints the chain; `/gt:gt-brief` drafts a repo's `CLAUDE.md` from the
->   standing decisions.
-> - **Less to carry.** `/gt:gt-optimize` now measures what your sessions spend rebuilding the prompt
->   cache, and can archive old research; `/gt:gt-minimize` prunes a session before you step away;
->   `/gt:gt-open` leads with a short catch-up after time away.
-> - **Across machines and outside sessions.** `/gt:gt-sync` pulls and pushes the vault between
->   machines (fast-forward only); reminders reach you by macOS notification, SMS or Discord through
->   your relay, or email — each off by default, each with a test that sends a real message.
-> - **A release pipeline for every project.** `release.sh`, generated from a table of steps and
->   gates you extend, stops at the first failure and never skips; gt measures every execution
->   (`gt_metrics.py`) and `/gt:gt-optimize --only execution` proposes faster ways to run them.
-> - **Guards.** A commit or push in a checkout you declared as another machine's is refused, and
->   `/gt:gt-doctor` says which repo a review command will actually look at. Run `/gt:gt-upgrade`
->   after installing.
->
-> **0.17.11** made every vault write go through the write queue (Core rule 1) and added the
-> optional `gt-lotr` gateway; **0.17.10** a write broker and specialist agents; **0.17.3–0.17.5**
-> published-copy checksums and install fixes. Details in the [CHANGELOG](CHANGELOG.md).
-
-> **0.17.2: what is waiting on you is in front of you when a session starts — and easy to clear.**
->
-> - **A MUST DO block at every start**, from one table in `<vault>/deadlines.md`: overdue items
->   🔴, items due within 14 days 🟡, counted down live. Two credential rotations once sat 15 days
->   overdue at top priority because priority is a sort order, not an alarm.
-> - **Handoffs keep coming back until someone deals with them** — one line each, never the
->   body — and a count of urgent tasks waiting on you. Switch any of it off in `/gt:gt-settings`.
-> - **Tasks the way a developer writes a TODO.** Add one tied to a page or source if you like,
->   list them without opening anything, and clear a backlog — done, dropped with a reason, or
->   deferred to a date (since 0.18.1: `/gt:gt-create task`, `/gt:gt-list`, `/gt:gt-handle`).
->   Handoffs get the same pair. Nothing is ever deleted.
-> - **Session claims survive a network change** — keyed on a machine id instead of a hostname.
-> - **Known:** macOS blocks scheduled (launchd) runs from reading a vault under CloudStorage; the
->   health check now says so. Details in the [CHANGELOG](CHANGELOG.md).
-
-> [!NOTE]
-> **0.16.2 closes the seam where the rules went quiet.** Context a hook adds does not
-> survive compaction — project-root `CLAUDE.md` is re-injected from disk, hook context is
-> summarised with everything else — so for the remainder of a turn in which auto-compaction
-> fired, the Core rules were present only as whatever the summariser kept. They are now
-> re-asserted on `SessionStart`/`compact` as well as every prompt. The mechanical tier was
-> never affected: `PreToolUse` guards and the `Stop` validator are commands, not context.
->
-> Also: `SessionEnd` hooks share a 1.5-second budget, and a hook that overruns is cancelled
-> with its **output discarded** — a report card could have started truncating invisibly. Hooks
-> can now declare a `timeout`. And the copyleft refusal knows the current SPDX spellings, so
-> `GPL-3.0-or-later` is refused *as copyleft* rather than as an unrecognised identifier.
->
-> **`/gt:gt-context` is explicit that its envelope is not a security control.** Published work
-> (arXiv:2503.00061) broke all eight defences it tested, above 50% attack success in every
-> case. The envelope makes content identifiable as someone's definition; what actually protects
-> you is that packs are reviewed before merge.
-
-> [!NOTE]
-> **0.16.0 gave the definitions somewhere to come from, and something to read them.**
-> Golden Thread has **no plugin runtime** — nobody's code runs on your machine as a
-> third-party add-on. Contributions arrive as **packs**: plain JSON data, reviewed and
-> merged into gt itself, after which they are first-party and held to the same release
-> gate as everything else. See [SUBMISSIONS.md](SUBMISSIONS.md).
->
-> The packs now have consumers. **`/gt:gt-scan`** checks code against the language
-> definitions in effect on this machine — and knows nothing about any language itself, so
-> four small packs teach it one it has never seen, with no code change. **`/gt:gt-optimize`**
-> reports vault content that costs context and earns nothing back. **`/gt:gt-handoff`** (now `/gt:gt-create handoff`)
-> writes the next session a handoff that marks what it must not assume. **`/gt:gt-allin`**
-> runs every check and tells you how many actually *ran*, and **`/gt:gt-allin-commit`**
-> commits only once a passing test receipt covers every staged file.
->
-> A definition you disagree with is switched off from your own vault:
-> `{"retract": [{"lang": "go"}]}`. Only your packs may retract, so a contributed pack can
-> never retire someone else's definition.
-
-> [!NOTE]
-> **0.15.0 made gt a small core plus six optional modules**, and an upgrade no longer
-> changes anything you wrote without saying so and asking. Three commands moved
-> (`/gt:gt-watch` → `/gt-watch:gt-watch`, `/gt:gt-farm` → `/gt-farm:gt-farm`,
-> `/gt:gt-demo` → `/gt-demo:gt-demo`), and the installer tells you. New with it: the vault
-> records how knowledge moves as events, and **`/gt-flow:gt-flow` draws it** — see
-> [Seeing how knowledge moved](#seeing-how-knowledge-moved). Choose modules with
-> `install.sh --list-modules`, `--without <name>` and `--with <name>`; details in the
-> [CHANGELOG](CHANGELOG.md).
-
-> [!NOTE]
-> **Since 0.12.4, work runs in parallel by default, and you will notice it.** A Core rule now
-> asks for divisible work to be split across your processors instead of crawling through
-> one core, and the tools here honour it: `tests/run.sh` and `dev/render-pdfs.sh` fan out,
-> and so will anything Claude writes while the rule is active. **The first sign is
-> usually your fans** — a suite that used to hold one core at 100% now holds sixteen at
-> 400%+, and Activity Monitor fills with `python3` or `Google Chrome` processes that all
-> disappear when the run ends. That is the feature working, not a runaway job. The
-> measurement behind it: the test suite went from 509s to 108s, 4.7x.
->
-> **You are in charge of how much of your machine it may use.**
->
-> ```bash
-> gt_settings.py set parallel_max 4      # never more than 4 workers, whatever the work
-> gt_settings.py set parallel_work off   # serial, and the Core rule stops being injected
-> gt_settings.py show                    # what is currently allowed
-> ```
->
-> **Also new in 0.12.5:** a `git commit` carrying code whose tests have not been seen to
-> pass is **refused**. Evidence is a receipt written by your test run (`tests/run.sh` and
-> `dev/release-check.sh` write their own; any project can with `gt_test_receipt.py record
-> --ok`). If a repo has no tests, exempt it once with `touch .gt-no-test-gate`; for a
-> single commit, `GT_TEST_GATE=off git commit …`; to switch it off entirely,
-> `gt_settings.py set test_gate off`. Docs-only commits are never blocked.
->
-> `parallel_max` defaults to `auto` — as many workers as the machine allows, and never
-> more than there are units of work. Cap it before a long run if you need the machine to
-> stay responsive for something else, if you are on battery, or if a remote end is
-> rate-limited. `off` is the full stop: nothing runs in parallel and the rule is not
-> asserted at all.
-
-## Who this is for
-
-You run several projects at once and the ideas never arrive in the right one. You are
-deep in project A when the fix for project B occurs to you, a session ends before the
-finding is written down, and by Monday you cannot remember which of the six things you
-touched last week was the urgent one. If your attention scatters, from ADHD or simply
-from load, a system that depends on remembering to file things in the right place will
-not hold.
-
-Golden Thread is built so that **capture never waits for the right context.** Write the
-thought as one line in the vault's inbox, from whatever session or project you happen
-to be in. A review sweep later routes each line to the project it belongs to. Every project keeps its open tasks in one place, and a single
-generated rollup ranks them across *all* projects, escalating by age and deadline, so
-"what should I work on?" has one answer instead of six status pages.
-
-The result is one place to look. Sessions read from it at startup, write back what they
-learned at the end, and the rules you most need to hold are re-asserted every turn
-instead of trusted to memory.
-
-## Feedback
-
-If you are using Golden Thread, or tried it and bounced off, I would like to hear about
-it. Questions, ideas, and "this worked for me" belong in
-[Discussions](https://github.com/shaven/golden-thread/discussions). Bugs and anything
-that behaved differently from the documentation belong in
-[Issues](https://github.com/shaven/golden-thread/issues). Both are read.
-
-## "In context" is not "applied"
-
-A rule can sit in a loaded file for an entire session and still be quietly dropped for
-dozens of turns — not because it was deleted, but because whatever is immediately
-salient crowds it out of attention.
-
-So a rule is only as durable as *the mechanism that re-asserts it*. Every rule carries
-a **scope** (`core` / `context` / `generic`) and an **enforcement** (`reminder`, which
-is re-injected every turn, or `validated`, where the output is checked and a violating
-reply is blocked). A rule that must never break is Core + Validated — the only
-combination that does not depend on in-the-moment discipline.
-
-The Core tier is deliberately small; every addition dilutes the reliability of the rest.
-
-| Rule | Enforcement | What it does |
-|---|---|---|
-| `core_concurrent_session_claim` | **validated** | Write vault content only through the write queue and apply it with `gt_broker.py drain`; never edit a vault file directly, and never write one another live session has claimed (queue-first since 0.17.11) |
-| `core_no_secrets_in_transcript` | **validated** | Never put a secret's value into the session — not to inspect, redact or check it |
-| `core_timestamp_every_message` | **validated** | Begin every reply with the current wall-clock timestamp |
-| `core_global_memory_scope` | reminder | `global-memory/` holds only facts needed in *every* project |
-| `core_memory_load_policy` | reminder | Do not auto-load the full memory index |
-| `core_verification_state` | reminder | Label every derived figure, and every path you assert after a stat (`gt_path_check.py`), with `unverified`, `self-verified` or `independently verified` |
-| `core_explicit_vault_target` | **validated** | Name the vault on every mutating tool run — `--vault` or `--dry-run` |
-| `core_secrets_live_in_the_store` | reminder | A secret's value rests only in the secrets store, never in source, a repo, a log or a session |
-| `core_parallel_when_beneficial` | reminder | Parallelise divisible work in every project, within one `parallel_max` budget shared by every session on the machine; serial must be justified |
-| `core_test_before_commit` | **validated** | Never commit code whose tests you have not seen pass; per-repo opt-out with `.gt-no-test-gate` |
-
-Two ways in: the user **designates** a rule, or an existing fact is **promoted** and
-must answer three questions — would its absence cause incorrect code, cause rework, or
-cascade into lower-level rules being written wrongly?
-
-Two of the validated rules show why both paths exist. `core_no_secrets_in_transcript`
-answers yes to all three. `core_timestamp_every_message` answers **no to all three** and
-is Core anyway: it is the *canary*, kept because its absence is visible rather than
-costly, so a broken hook announces itself.
-
-## What is in this repo
-
-| Path | What it is |
-|---|---|
-| `golden-thread-plugin/golden-thread/<ver>/` | The `gt` plugin — 37 skills, scripts, templates, hooks, packs |
-| `golden-thread-plugin/golden-thread-wiki/<ver>/` | Module `wiki` (plugin `gt-wiki`) — 5 skills for LLM wiki vaults |
-| `golden-thread-plugin/golden-thread-demo/<ver>/` | Module `demo` (plugin `gt-demo`) — the guided PizzaBot 3000 tour |
-| `golden-thread-plugin/golden-thread-watch/<ver>/` | Module `watch` (plugin `gt-watch`) — follow upstream git repos, P0 on a security fix |
-| `golden-thread-plugin/golden-thread-report-card/<ver>/` | Module `report-card` (plugin `gt-report-card`) — the session report card and close-out question |
-| `golden-thread-plugin/golden-thread-farm/<ver>/` | Module `farm` (plugin `gt-farm`) — work packets for an external AI service |
-| `golden-thread-plugin/golden-thread-flow/<ver>/` | Module `flow` (plugin `gt-flow`) — an offline timeline of knowledge moving up the ladder |
-| `golden-thread-plugin/golden-thread-visualize/<ver>/` | Module `visualize` (plugin `gt-visualize`) — a codebase in 3D: how-it-works walkthroughs and a code city |
-| `golden-thread-plugin/golden-thread-usage/<ver>/` | Module `usage` (plugin `gt-usage`) — the plan-allowance meter, quiet until a window is near its ceiling, and the savings ledger (farmed packets included) |
-| `golden-thread-plugin/golden-thread-lotr/<ver>/` | Module `lotr` (plugin `gt-lotr`) — LOTR, also called gt MCP: one gateway in front of GitHub, Jira, Microsoft Graph and other REST APIs; off by default |
-| `golden-thread-plugin/golden-thread-workflow/<ver>/` | Module `workflow` (plugin `gt-workflow`) — workflows you own: a saved chain of steps (gt tools, LOTR calls, a local engine, steps that wait for you or Claude) run by name; off by default |
-| `golden-thread-plugin/install.sh` | Installs gt and every module that is on, wires the hooks, applies upgrades |
-
-The vault *content* lives in a separate private repo. This one is the machinery.
-
-## Documentation
-
-The guides live one level down, under [`golden-thread-plugin/`](golden-thread-plugin/),
-alongside the code they describe. Start with Getting Started; the Manual is the reference.
-
-| Document | What it covers |
-|---|---|
-| [Changelog](CHANGELOG.md) | What changed in each release, newest first |
-| [Announcements](../../discussions/categories/announcements) | Release write-ups: what broke, what changed, and what you have to do |
-| [Getting Started](golden-thread-plugin/ONBOARDING.md) · [PDF](golden-thread-plugin/ONBOARDING.pdf) | A guided first session in six steps, about fifteen minutes |
-| [User Manual](golden-thread-plugin/MANUAL.md) · [PDF](golden-thread-plugin/MANUAL.pdf) | Complete reference: every skill, the vault layout, verification, the promotion ladder |
-| [Install Guide](golden-thread-plugin/INSTALL.md) | Installing gt and its modules, choosing modules, upgrading and rolling back, wiring the hooks, adopting an existing vault |
-| [Obsidian & Daily Workflow](golden-thread-plugin/OBSIDIAN-WORKFLOW.md) · [PDF](golden-thread-plugin/OBSIDIAN-WORKFLOW.pdf) | Living in the vault day to day — daily notes, properties, Dataview |
-| [Farming to Your Own Hardware](golden-thread-plugin/FARM-LOCAL-ENGINES.md) · [PDF](golden-thread-plugin/FARM-LOCAL-ENGINES.pdf) | Running open-weights models on machines you already own as gt-farm engines: what to measure, how to size a node, the service table, the sender, and the savings ledger |
-| [Spending Fewer Tokens](golden-thread-plugin/TOKEN-SAVINGS.md) · [PDF](golden-thread-plugin/TOKEN-SAVINGS.pdf) | Every way to make gt and Claude Code use less of your allowance: what to turn on, what you will notice, what each saves, and recommended settings |
-| [Developer Guide](golden-thread-plugin/golden-thread-developer-guide.html) · [PDF](golden-thread-plugin/golden-thread-developer-guide.pdf) | Internals: hooks, scripts, the component manifest, extending the plugin |
-| [Plugin Documentation](golden-thread-plugin/golden-thread-docs.md) · [HTML](golden-thread-plugin/golden-thread-docs.html) · [PDF](golden-thread-plugin/golden-thread-docs.pdf) | The combined document — overview, Core rules, every skill, install and operation, in one file. Refreshed to current on 2026-09-09 (it had been frozen at gt 0.6.0 for six releases); now tracks the shipped release and is checked for drift by `build-docs.py` |
-| [`docs/workflow.html`](docs/workflow.html) · [`docs/ingesting.html`](docs/ingesting.html) | Standalone diagrams of the work and ingest loops |
-| `golden-thread.pdf` | The earliest write-up here (2026-08-10); predates the current plugin layout, kept for reference |
-
-The PDFs and HTML are rendered from the markdown beside them — when the two disagree,
-**the markdown is the source of truth.**
-
-## How it's tested
-
-<!-- gt:tests:begin -- generated by golden-thread-plugin/dev/help_record.py build; do not edit -->
-**9,117 tests in 358 files**, counted from `golden-thread-plugin/tests/` the way the test runner loads them, each time the help page is built. By kind (sorted by test name, so approximate): 7,067 functionality, 1,577 invalid input, 473 adversarial. These say what is tested, not that a particular run passed; a release ships only on a passing run of all of them.
-
-| Area | Tests | Files | What they check |
-|---|---:|---:|---|
-| Install, upgrade and uninstall | 961 | 45 | A fresh install, an upgrade from any earlier release, a failed install rolled back, and an uninstall that leaves nothing behind, on macOS, Linux and Windows. |
-| Security guards | 1,287 | 47 | The security level, paranoid and its action tokens, gt unlock, sandbox mode, protected paths and the push and commit fingerprints: each refuses what it should and allows what it should. |
-| Secrets | 68 | 4 | No credential is shipped, logged or written into the vault, and the secrets scan finds the ones it must. |
-| LOTR gateway | 1,143 | 31 | The gateway to GitHub, Jira and Microsoft 365: reads stay reads, writes and sends need the right approval, sign-in tokens are handled safely. |
-| File and network brokers | 307 | 8 | The routes an assistant uses to read, write and fetch: limits, allow lists and refusals. |
-| Vault writes and Core rules | 529 | 22 | Every vault write goes through the queue, nothing overwrites another session's work, and the Core rules are injected and checked on every turn. |
-| Docs, help and release checks | 423 | 25 | The manual, this help page and the release notes match the code, and the release gates themselves work. |
-| Modules | 1,291 | 47 | The optional plugins beside gt: each installs, runs and removes cleanly. |
-| Commands and everyday workflows | 3,108 | 129 | Everything else gt does: tasks, handoffs, linting, promotion, scanning, the daily note and the rest of the commands. |
-<!-- gt:tests:end -->
-
-What the tests do not prove: they show gt does what it is meant to in expected use. Some are
-deliberately hostile (red-team tests of gt unlock and of LOTR's sign-in), but this is not an
-independent security audit. [`SECURITY.md`](golden-thread-plugin/SECURITY.md) says what each protection does not stop.
-
 ## Install
+
+New to the terminal? The [animated install guide](https://htmlpreview.github.io/?https://github.com/shaven/golden-thread/blob/main/golden-thread-plugin/golden-thread/0.21.6/help/artifacts/install-guide.html) walks from a bare Mac or Windows PC to a first session, one screen per step.
 
 **From inside Claude Code (no terminal):**
 
@@ -626,6 +230,252 @@ different facts and only one of them is reassuring.
 | `gt_surface.py check [--vault V] [--dry-run] [--json]` · `must-do [--vault V]` · `handoffs --project SLUG [--vault V]` | The **reader** for everything above, run at `SessionStart` (0.17.2). Every session: a **MUST DO** block from `<vault>/deadlines.md` — one table, `\| item \| category \| due \| see \|` — overdue 🔴 or due within 14 days 🟡, counted down from the row's date at run time, never stored. Every session until it is handled or deferred to a date: each waiting handoff, one line — path, project, age, open items — never its body (setting `handoff_surface`: `any` by default, `project` for only when `/gt:gt-open` opens that project, `manual` for only on request). Once each: a state file `gt_state.py` wrote; after a compaction the newest goes back to the model in full. **Surfacing is the alarm; the task is the record** — it never creates or closes a task and never writes the vault, only a machine-local "already shown" ledger. A clean start says "nothing waiting". Setting `surface`. |
 | `gt_handoff_status.py list --vault V [--project SLUG] [--all] [--json]` · `mark FILE --vault V --status handled\|open\|deferred [--until YYYY-MM-DD] [--reason TEXT] [--dry-run]` | Whether a handoff is still waiting on someone (0.17.2). `open` keeps surfacing; `deferred` must carry a future `--until` date and is open again on that date ("later, some time" is `handled` with a reason); `handled` is marked by a person **or** follows when every task citing the handoff's filename is checked off; `history` is a pre-0.17.2 handoff with no status, over a week old, with no open citing task — so an upgrade does not resurface every old one. `mark` appends to the handoff's status log. It never loads a handoff's body. |
 
+## What it saves (measured, not claimed)
+
+![Golden Thread savings: without the Core rules a correct result costs 1.28x; LOTR keeps main-context tokens down by 50% or more](golden-thread-plugin/docs/gt-savings.png)
+
+Golden Thread costs tokens: the Core rules are re-sent on every prompt, and the hooks and agents
+add work. It also saves tokens in several ways. The `gt-usage` module keeps a **savings ledger** on
+your machine (from Claude Code's own usage records; nothing is sent anywhere) that puts each saving
+next to its cost. Every figure carries how it was established: *measured*, *estimated* (derived
+from measured inputs), or *design* (a claim no measurement backs yet, never counted in the net).
+
+| Mechanism | What it saves | Evidence |
+|---|---|---|
+| **Core rules** | Rework. Same coding tasks, rules on vs off, every failed run re-prompted until correct: without the rules a correct result cost **1.26×** (weighted by a real model mix), 34/45 runs were right first time vs 44/45 with them, and 7 of 15 replies pasted a live API key vs 0 of 15 | 90-run A/B benchmark on Opus, Sonnet and Haiku, 2026-10-11 (self-verified) |
+| **LOTR gateway** | Tool payloads kept out of the main conversation: 98% fewer main-context tokens over 25 Jira queries | One measured session (measured); details below |
+| **Agents keeping dumps out of context** | A subagent reads the large output and returns a summary; the main session never carries the raw text | Per agent run, from the transcripts (estimated) |
+| **Agent model tiers** | Routine agent work runs on a cheaper model than the session's. The row goes negative when an agent runs on a pricier model than its session, and the ledger shows that too | Per agent run, priced at list (estimated) |
+| **Cache-expiry guard** | Compacts an idle session before its prompt cache expires (in place, inside the open session, since 0.21.2), instead of paying a full cache rebuild | Per cut (estimated) |
+| **Farmed packets (gt-farm)** | Bulk, mechanical work sent to an engine on your own hardware (or another service) instead of Claude; the report shows each engine, local share, throughput and the share of the window's work kept off Claude | Per packet: measured from the engine's usage field, estimated for relayed packets |
+| **Leaks, releases, persona work** | Secret rotations, release re-runs and role-specific rework the rules prevent | Design only, not yet benchmarked, kept out of the net |
+
+On the author's machine over one week the ledger showed the Core rules avoiding about 34 times
+their own token cost (estimated: the benchmark factor applied to measured usage). The graphic uses
+a 50% Opus model mix and shows LOTR at a conservative 50%.
+
+See your own figures with `/gt-usage:gt-usage-savings`. Tokens are the unit; dollars are list price.
+Set `savings_billing api` if your account is billed per token, and the report names them as spend
+avoided; on a subscription they are an equivalent, not a bill.
+
+## One gateway for your MCP servers (LOTR)
+
+![One tool connection, a fraction of the tokens: the same Jira query measured three ways, 98% fewer main-context tokens over 25 queries through LOTR with a specialized agent](golden-thread-plugin/docs/lotr-token-savings.png)
+
+Connecting an MCP server directly to Claude Code costs you twice: every tool's schema is loaded into
+every session whether you use it or not, and every response lands in your conversation in full.
+**LOTR** is Golden Thread's gateway. It sits in front of the MCP servers you connect and changes both
+costs.
+
+Since 0.21.4 LOTR can also front a local MCP server that runs as a program (stdio), and
+`lotr template guide` shows how to write a connection for any service yourself. gt-lotr 0.5.0 makes
+that a few steps: say "connect Linear", paste a key or sign in, done (`lotr setup`). Templates for
+named services are included with gt-lotr and also released on their own, in `lotr-templates/`;
+`lotr template update` refreshes them between releases.
+
+- **One gateway instead of many tool lists.** The session sees LOTR's 4 tools and finds
+  operations on demand. Recent Claude Code already defers MCP tool schemas (names only until a
+  tool is used), so the saving today is mostly the per-server tool-name lists and the servers'
+  own instructions blocks, which LOTR replaces with one short catalog. Our earlier figure (about
+  720 tokens instead of about 7,400) measured full schemas offline with tiktoken on one server,
+  not what deferral leaves in context. Check your own setup with `/context`, direct vs. through
+  the gateway.
+- **Capped responses.** A connected server's answer is capped before it reaches the conversation.
+- **Specialist agents keep the payload out of the conversation.** A domain agent makes the call in
+  its own context and returns only the compact result. In one measured case a 20-ticket query
+  returned 313 tokens to the main context (self-verified, one run). Shipped in 0.20.2 for Jira,
+  Microsoft 365 and GitHub, split into readers (no write tools) and writers (act only on a
+  structured instruction built from your own words).
+- **Native OAuth sign-in** (`lotr connect`). You sign in from your own terminal. The refresh token
+  is sealed when unlock is on, the server's hosts are pinned, and sign-in refuses to run from inside
+  Claude Code. Verified against Linear's live server; Google and Microsoft are tested against fake
+  servers only.
+- **Consent and strict tiers.** Writes that delete, send or merge need consent, raised by the
+  gateway, not by the model, and the prompt says who and what (a mail's recipients, a merge's
+  target). Each call tool carries only its own tier, and MCP tools are rated by name on every
+  connection, so a server's "read-only" hint cannot clear a `delete_*` tool.
+- **See what is connected.** `/gt:gt-settings lotr` shows every connection and whether it works
+  (connected, needs sign-in, error, not used yet), like Claude Code's `/mcp`.
+
+**What it does not do:** it does not stop a process already running as you. See
+[SECURITY.md](golden-thread-plugin/SECURITY.md) for the threat model.
+
+> **0.21.0: the install asks every choice; hooks ship with the plugins.** A new install lists its questions
+> with `install.sh --questions`, security first; `paranoid` and single-use action tokens protect gt's own
+> code and the riskiest actions; disk read, network fetch and disk write are brokered; `token_profile` sets
+> seven cost settings at once; `gt-pane` adds a button pane; `/gt:gt-help` shows any command running.
+> **Breaking:** `/gt:gt-close` now closes the session, and `/gt:gt-complete` completes a project, task or
+> handoff. See the [CHANGELOG](CHANGELOG.md).
+>
+> **0.20.5: configurable lockdown: you choose how much Claude may run without asking.** One setting,
+> `lockdown`, four levels from `very-secure` (the default, exactly 0.20.4) to `insecure`, each a set of
+> Claude Code allow rules gt adds to `~/.claude/settings.json` and takes out again. The installer asks;
+> change it with `/gt:gt-settings lockdown <level>`. The levels cut approval prompts and are not a
+> security boundary — see the chart in the [plugin README](golden-thread-plugin/README.md).
+>
+> **0.20.4: a fingerprint before every push (Touch ID or Windows Hello) and on every commit (macOS).**
+> `push_fingerprint` asks for it before a push, `push_fingerprint_seal_token` seals the push token behind it so a plain
+> `--no-verify` push still asks, and `commit_fingerprint` signs every commit with a Secure Enclave key, plus a
+> no-bypass GitHub ruleset that refuses unsigned commits on the server. github.com and GitHub Enterprise.
+> (0.20.3 was a beta and was never released.)
+>
+> **0.20.2: LOTR connection status, reader/writer domain agents, strict tool tiers, and gt sandbox
+> mode in every skill.** See the [release notes](https://github.com/shaven/golden-thread/releases/tag/v0.20.2).
+>
+> **0.20.1: gt unlock and gt sandbox mode (both off by default), and Windows, finished.** Turned on, agents need your
+> presence — TOTP plus Touch ID (macOS) or Windows Hello, optionally Microsoft Entra ID sign-in —
+> before they use LOTR connections, credentials, publishing or gt's own guards. Callers are
+> identified by the kernel, approvals are hardware signatures gt verifies itself, credentials can
+> be sealed under the Secure Enclave / TPM, and `gt_unlock.py verify` prints the level this machine
+> really runs at. *"Unlock proves a person was present and limits what agents can do on their own.
+> It is not anti-malware. If something already runs as you, it can wait for you to unlock."* Read
+> [`SECURITY.md`](golden-thread-plugin/SECURITY.md) before turning it on. **gt sandbox mode** has Claude Code's own sandbox
+> and permission rules keep the assistant's shell and file tools off the vault and gt's state;
+> the vault is read through gt's MCP server and written only through the queue (native Windows:
+> permission rules only — friction, not a boundary). Also: `python3` works in
+> Claude's shell on Windows, every gt write is LF, scheduled jobs run on Task Scheduler, the suite
+> runs on Windows, gt-lotr runs on Windows (0.3.0) with its MCP server started by the installer's
+> Python, and a failed install rolls back. And on a current Claude Code: each pipeline stage is a
+> plugin agent with its own model **and effort** (`gt:extract` … `gt:place`), ingest and promote
+> stages can run as the `gt:pipeline-stage` workflow with schema-checked output, and LOTR's tools
+> declare their result schema; an older Claude Code takes the earlier route. There is no
+> published 0.19.3.
+
+> **0.17.2: what is waiting on you is in front of you when a session starts — and easy to clear.**
+>
+> - **A MUST DO block at every start**, from one table in `<vault>/deadlines.md`: overdue items
+>   🔴, items due within 14 days 🟡, counted down live. Two credential rotations once sat 15 days
+>   overdue at top priority because priority is a sort order, not an alarm.
+> - **Handoffs keep coming back until someone deals with them** — one line each, never the
+>   body — and a count of urgent tasks waiting on you. Switch any of it off in `/gt:gt-settings`.
+> - **Tasks the way a developer writes a TODO.** Add one tied to a page or source if you like,
+>   list them without opening anything, and clear a backlog — done, dropped with a reason, or
+>   deferred to a date (since 0.18.1: `/gt:gt-create task`, `/gt:gt-list`, `/gt:gt-handle`).
+>   Handoffs get the same pair. Nothing is ever deleted.
+> - **Session claims survive a network change** — keyed on a machine id instead of a hostname.
+> - **Known:** macOS blocks scheduled (launchd) runs from reading a vault under CloudStorage; the
+>   health check now says so. Details in the [CHANGELOG](CHANGELOG.md).
+
+## Who this is for
+
+You run several projects at once and the ideas never arrive in the right one. You are
+deep in project A when the fix for project B occurs to you, a session ends before the
+finding is written down, and by Monday you cannot remember which of the six things you
+touched last week was the urgent one. If your attention scatters, from ADHD or simply
+from load, a system that depends on remembering to file things in the right place will
+not hold.
+
+Golden Thread is built so that **capture never waits for the right context.** Write the
+thought as one line in the vault's inbox, from whatever session or project you happen
+to be in. A review sweep later routes each line to the project it belongs to. Every project keeps its open tasks in one place, and a single
+generated rollup ranks them across *all* projects, escalating by age and deadline, so
+"what should I work on?" has one answer instead of six status pages.
+
+The result is one place to look. Sessions read from it at startup, write back what they
+learned at the end, and the rules you most need to hold are re-asserted every turn
+instead of trusted to memory.
+
+## "In context" is not "applied"
+
+A rule can sit in a loaded file for an entire session and still be quietly dropped for
+dozens of turns — not because it was deleted, but because whatever is immediately
+salient crowds it out of attention.
+
+So a rule is only as durable as *the mechanism that re-asserts it*. Every rule carries
+a **scope** (`core` / `context` / `generic`) and an **enforcement** (`reminder`, which
+is re-injected every turn, or `validated`, where the output is checked and a violating
+reply is blocked). A rule that must never break is Core + Validated — the only
+combination that does not depend on in-the-moment discipline.
+
+The Core tier is deliberately small; every addition dilutes the reliability of the rest.
+
+| Rule | Enforcement | What it does |
+|---|---|---|
+| `core_concurrent_session_claim` | **validated** | Write vault content only through the write queue and apply it with `gt_broker.py drain`; never edit a vault file directly, and never write one another live session has claimed (queue-first since 0.17.11) |
+| `core_no_secrets_in_transcript` | **validated** | Never put a secret's value into the session — not to inspect, redact or check it |
+| `core_timestamp_every_message` | **validated** | Begin every reply with the current wall-clock timestamp |
+| `core_global_memory_scope` | reminder | `global-memory/` holds only facts needed in *every* project |
+| `core_memory_load_policy` | reminder | Do not auto-load the full memory index |
+| `core_verification_state` | reminder | Label every derived figure, and every path you assert after a stat (`gt_path_check.py`), with `unverified`, `self-verified` or `independently verified` |
+| `core_explicit_vault_target` | **validated** | Name the vault on every mutating tool run — `--vault` or `--dry-run` |
+| `core_secrets_live_in_the_store` | reminder | A secret's value rests only in the secrets store, never in source, a repo, a log or a session |
+| `core_parallel_when_beneficial` | reminder | Parallelise divisible work in every project, within one `parallel_max` budget shared by every session on the machine; serial must be justified |
+| `core_test_before_commit` | **validated** | Never commit code whose tests you have not seen pass; per-repo opt-out with `.gt-no-test-gate` |
+
+Two ways in: the user **designates** a rule, or an existing fact is **promoted** and
+must answer three questions — would its absence cause incorrect code, cause rework, or
+cascade into lower-level rules being written wrongly?
+
+Two of the validated rules show why both paths exist. `core_no_secrets_in_transcript`
+answers yes to all three. `core_timestamp_every_message` answers **no to all three** and
+is Core anyway: it is the *canary*, kept because its absence is visible rather than
+costly, so a broken hook announces itself.
+
+## What is in this repo
+
+| Path | What it is |
+|---|---|
+| `golden-thread-plugin/golden-thread/<ver>/` | The `gt` plugin — 37 skills, scripts, templates, hooks, packs |
+| `golden-thread-plugin/golden-thread-wiki/<ver>/` | Module `wiki` (plugin `gt-wiki`) — 5 skills for LLM wiki vaults |
+| `golden-thread-plugin/golden-thread-demo/<ver>/` | Module `demo` (plugin `gt-demo`) — the guided PizzaBot 3000 tour |
+| `golden-thread-plugin/golden-thread-watch/<ver>/` | Module `watch` (plugin `gt-watch`) — follow upstream git repos, P0 on a security fix |
+| `golden-thread-plugin/golden-thread-report-card/<ver>/` | Module `report-card` (plugin `gt-report-card`) — the session report card and close-out question |
+| `golden-thread-plugin/golden-thread-farm/<ver>/` | Module `farm` (plugin `gt-farm`) — work packets for an external AI service |
+| `golden-thread-plugin/golden-thread-flow/<ver>/` | Module `flow` (plugin `gt-flow`) — an offline timeline of knowledge moving up the ladder |
+| `golden-thread-plugin/golden-thread-visualize/<ver>/` | Module `visualize` (plugin `gt-visualize`) — a codebase in 3D: how-it-works walkthroughs and a code city |
+| `golden-thread-plugin/golden-thread-usage/<ver>/` | Module `usage` (plugin `gt-usage`) — the plan-allowance meter, quiet until a window is near its ceiling, and the savings ledger (farmed packets included) |
+| `golden-thread-plugin/golden-thread-lotr/<ver>/` | Module `lotr` (plugin `gt-lotr`) — LOTR, also called gt MCP: one gateway in front of GitHub, Jira, Microsoft Graph and other REST APIs; off by default |
+| `golden-thread-plugin/golden-thread-workflow/<ver>/` | Module `workflow` (plugin `gt-workflow`) — workflows you own: a saved chain of steps (gt tools, LOTR calls, a local engine, steps that wait for you or Claude) run by name; off by default |
+| `golden-thread-plugin/install.sh` | Installs gt and every module that is on, wires the hooks, applies upgrades |
+
+The vault *content* lives in a separate private repo. This one is the machinery.
+
+## Documentation
+
+The guides live one level down, under [`golden-thread-plugin/`](golden-thread-plugin/),
+alongside the code they describe. Start with Getting Started; the Manual is the reference.
+
+| Document | What it covers |
+|---|---|
+| [Changelog](CHANGELOG.md) | What changed in each release, newest first |
+| [Announcements](../../discussions/categories/announcements) | Release write-ups: what broke, what changed, and what you have to do |
+| [Getting Started](golden-thread-plugin/ONBOARDING.md) · [PDF](golden-thread-plugin/ONBOARDING.pdf) | A guided first session in six steps, about fifteen minutes |
+| [User Manual](golden-thread-plugin/MANUAL.md) · [PDF](golden-thread-plugin/MANUAL.pdf) | Complete reference: every skill, the vault layout, verification, the promotion ladder |
+| [Install Guide](golden-thread-plugin/INSTALL.md) | Installing gt and its modules, choosing modules, upgrading and rolling back, wiring the hooks, adopting an existing vault |
+| [Animated Install Guide](https://htmlpreview.github.io/?https://github.com/shaven/golden-thread/blob/main/golden-thread-plugin/golden-thread/0.21.6/help/artifacts/install-guide.html) | From a bare Mac or Windows PC to a first session, one screen per step, with the optional LOTR and farm modules |
+| [Obsidian & Daily Workflow](golden-thread-plugin/OBSIDIAN-WORKFLOW.md) · [PDF](golden-thread-plugin/OBSIDIAN-WORKFLOW.pdf) | Living in the vault day to day — daily notes, properties, Dataview |
+| [Farming to Your Own Hardware](golden-thread-plugin/FARM-LOCAL-ENGINES.md) · [PDF](golden-thread-plugin/FARM-LOCAL-ENGINES.pdf) | Running open-weights models on machines you already own as gt-farm engines: what to measure, how to size a node, the service table, the sender, and the savings ledger |
+| [Spending Fewer Tokens](golden-thread-plugin/TOKEN-SAVINGS.md) · [PDF](golden-thread-plugin/TOKEN-SAVINGS.pdf) | Every way to make gt and Claude Code use less of your allowance: what to turn on, what you will notice, what each saves, and recommended settings |
+| [Developer Guide](golden-thread-plugin/golden-thread-developer-guide.html) · [PDF](golden-thread-plugin/golden-thread-developer-guide.pdf) | Internals: hooks, scripts, the component manifest, extending the plugin |
+| [Plugin Documentation](golden-thread-plugin/golden-thread-docs.md) · [HTML](golden-thread-plugin/golden-thread-docs.html) · [PDF](golden-thread-plugin/golden-thread-docs.pdf) | The combined document — overview, Core rules, every skill, install and operation, in one file. Refreshed to current on 2026-09-09 (it had been frozen at gt 0.6.0 for six releases); now tracks the shipped release and is checked for drift by `build-docs.py` |
+| [`docs/workflow.html`](docs/workflow.html) · [`docs/ingesting.html`](docs/ingesting.html) | Standalone diagrams of the work and ingest loops |
+| `golden-thread.pdf` | The earliest write-up here (2026-08-10); predates the current plugin layout, kept for reference |
+
+The PDFs and HTML are rendered from the markdown beside them — when the two disagree,
+**the markdown is the source of truth.**
+
+## How it's tested
+
+<!-- gt:tests:begin -- generated by golden-thread-plugin/dev/help_record.py build; do not edit -->
+**9,117 tests in 358 files**, counted from `golden-thread-plugin/tests/` the way the test runner loads them, each time the help page is built. By kind (sorted by test name, so approximate): 7,067 functionality, 1,577 invalid input, 473 adversarial. These say what is tested, not that a particular run passed; a release ships only on a passing run of all of them.
+
+| Area | Tests | Files | What they check |
+|---|---:|---:|---|
+| Install, upgrade and uninstall | 961 | 45 | A fresh install, an upgrade from any earlier release, a failed install rolled back, and an uninstall that leaves nothing behind, on macOS, Linux and Windows. |
+| Security guards | 1,287 | 47 | The security level, paranoid and its action tokens, gt unlock, sandbox mode, protected paths and the push and commit fingerprints: each refuses what it should and allows what it should. |
+| Secrets | 68 | 4 | No credential is shipped, logged or written into the vault, and the secrets scan finds the ones it must. |
+| LOTR gateway | 1,143 | 31 | The gateway to GitHub, Jira and Microsoft 365: reads stay reads, writes and sends need the right approval, sign-in tokens are handled safely. |
+| File and network brokers | 307 | 8 | The routes an assistant uses to read, write and fetch: limits, allow lists and refusals. |
+| Vault writes and Core rules | 529 | 22 | Every vault write goes through the queue, nothing overwrites another session's work, and the Core rules are injected and checked on every turn. |
+| Docs, help and release checks | 423 | 25 | The manual, this help page and the release notes match the code, and the release gates themselves work. |
+| Modules | 1,291 | 47 | The optional plugins beside gt: each installs, runs and removes cleanly. |
+| Commands and everyday workflows | 3,108 | 129 | Everything else gt does: tasks, handoffs, linting, promotion, scanning, the daily note and the rest of the commands. |
+<!-- gt:tests:end -->
+
+What the tests do not prove: they show gt does what it is meant to in expected use. Some are
+deliberately hostile (red-team tests of gt unlock and of LOTR's sign-in), but this is not an
+independent security audit. [`SECURITY.md`](golden-thread-plugin/SECURITY.md) says what each protection does not stop.
+
 ## Typical use
 
 | Situation | What you run | The part that bites |
@@ -813,6 +663,177 @@ Two scripts in `golden-thread-wiki` come directly from Jonathan's work:
   diff baseline; web-only sources are flagged for the LLM to compare.
 
 **Sergey Kryvets** recommended adding a visualization tool to Golden Thread — a great idea that became **gt-visualize**: the 3D code city, the scroll-driven explainers that show how a system's parts work together, publishing, and the guided walkthrough. Thank you, Sergey.
+
+## Version History
+
+Newest first. Each entry is the note that used to sit at the top of this file.
+
+### 0.21.5
+
+**0.21.5:** the install guide in `/gt:gt-help` names the vault folder gt suggests, `~/GoldenThread`.
+
+### 0.21.4
+
+**0.21.4:** connect an MCP service in a few steps from a catalog of sixteen templates (say
+"connect Linear"; `lotr setup`), personas that shape the session as well as new projects, a First
+day walkthrough and a guide per role in `/gt:gt-help`, `install.sh --only NAME` to add or update
+one module, and `~/GoldenThread` as the default vault, with a warning for synced or shared drives.
+Also new: a context nudge and auto-compact, a farm ladder to engines on your own hardware, the
+optional `gt-workflow` module, a plan's scope checked at every commit, and `lotr pull`.
+
+### 0.19.2
+
+**0.19.2: gt installs on native Windows.** Run `install.sh` from Git Bash, or the new
+`install.cmd` from cmd.exe, PowerShell or Explorer. The installer finds a real Python 3.8+
+(the Microsoft Store Python does not count, and it says what to install when that is all
+there is), and the hooks run under Git Bash as Claude Code for Windows runs them. Nothing
+changes on macOS or Linux. See *Windows* in [`INSTALL.md`](golden-thread-plugin/INSTALL.md).
+
+### 0.19.1
+
+**0.19.1: right-sized models, SSO for LOTR, and fixes from installing 0.18.1.** (There is no
+published 0.19.0.) **Model and effort per skill:** every skill declares fast/balanced/deep, and the
+installer writes a profile into the installed copies — `average` (haiku with no effort setting,
+sonnet·medium, opus·high; a new install's default), `very-high` (opus·xhigh) or `inherit` —
+with per-skill and per-plugin overrides (`gt_model_policy.py`) and a doctor `model-policy` row;
+specialist agents run on the model their task needs (`agent_models`, haiku/sonnet/opus by tier).
+**LOTR handles SSO:** `lotr connect <name> --url <mcp-url>` signs in to an OAuth MCP server from your own
+terminal (native OAuth, gt-lotr 0.3.0). The refresh token is sealed when unlock is on, the server's hosts are
+pinned, and sign-in refuses to run from inside Claude Code. Verified live against Linear; Google and Microsoft
+are tested against fake servers only. `lotr add-mcp` still reuses an existing client's token by reference
+(gt-lotr 0.2.0). **Recall:** `gt_bench.py recall` measures
+how often lookup finds the right page; optional prompt hints (`vault_hints`, off by default).
+**Supersession and expiry** applied when notes are read (`gt_supersede.py`). **Fixes:** the
+queue guard reads shell tokens and follows `cd`; nothing writes bytecode into the published copy; post-install
+resolves the installed release from any path and every completed run writes its receipt; one
+recorded interpreter for every launchd job; the commit gate fits a large repo; the Stop validator
+no longer demands a timestamp from a turn that was never given one (the install-time alert).
+After installing, restart and run `/gt:gt-upgrade`.
+
+### 0.18.1
+
+**0.18.1: one verb per action, a plan before code, and less to carry.**
+
+- **One skill per verb.** `/gt:gt-create`, `/gt:gt-open`, `/gt:gt-list`, `/gt:gt-handle` and the
+  new `/gt:gt-close` (0.21.0: `/gt:gt-complete`) take what they act on — a project, a task, a handoff — as their argument.
+  Closing a project walks every open item to a decision, offers what it learned for promotion, and
+  archives it in place. The old task and handoff skill names still work through 0.18.x.
+- **Plan, then implement.** `/gt:gt-plan` writes a phased, test-first plan and waits for your
+  approval; `/gt:gt-implement` runs it one phase at a time, stops on any red, and commits only
+  when you say so.
+- **Decisions you can trace.** ADRs can record when they stop being true and what they replaced;
+  "how did we decide X?" prints the chain; `/gt:gt-brief` drafts a repo's `CLAUDE.md` from the
+  standing decisions.
+- **Less to carry.** `/gt:gt-optimize` now measures what your sessions spend rebuilding the prompt
+  cache, and can archive old research; `/gt:gt-minimize` prunes a session before you step away;
+  `/gt:gt-open` leads with a short catch-up after time away.
+- **Across machines and outside sessions.** `/gt:gt-sync` pulls and pushes the vault between
+  machines (fast-forward only); reminders reach you by macOS notification, SMS or Discord through
+  your relay, or email — each off by default, each with a test that sends a real message.
+- **A release pipeline for every project.** `release.sh`, generated from a table of steps and
+  gates you extend, stops at the first failure and never skips; gt measures every execution
+  (`gt_metrics.py`) and `/gt:gt-optimize --only execution` proposes faster ways to run them.
+- **Guards.** A commit or push in a checkout you declared as another machine's is refused, and
+  `/gt:gt-doctor` says which repo a review command will actually look at. Run `/gt:gt-upgrade`
+  after installing.
+
+### 0.17.11
+
+**0.17.11** made every vault write go through the write queue (Core rule 1) and added the
+optional `gt-lotr` gateway; **0.17.10** a write broker and specialist agents; **0.17.3–0.17.5**
+published-copy checksums and install fixes. Details in the [CHANGELOG](CHANGELOG.md).
+
+### 0.16.2
+
+**0.16.2 closes the seam where the rules went quiet.** Context a hook adds does not
+survive compaction — project-root `CLAUDE.md` is re-injected from disk, hook context is
+summarised with everything else — so for the remainder of a turn in which auto-compaction
+fired, the Core rules were present only as whatever the summariser kept. They are now
+re-asserted on `SessionStart`/`compact` as well as every prompt. The mechanical tier was
+never affected: `PreToolUse` guards and the `Stop` validator are commands, not context.
+
+Also: `SessionEnd` hooks share a 1.5-second budget, and a hook that overruns is cancelled
+with its **output discarded** — a report card could have started truncating invisibly. Hooks
+can now declare a `timeout`. And the copyleft refusal knows the current SPDX spellings, so
+`GPL-3.0-or-later` is refused *as copyleft* rather than as an unrecognised identifier.
+
+**`/gt:gt-context` is explicit that its envelope is not a security control.** Published work
+(arXiv:2503.00061) broke all eight defences it tested, above 50% attack success in every
+case. The envelope makes content identifiable as someone's definition; what actually protects
+you is that packs are reviewed before merge.
+
+### 0.16.0
+
+**0.16.0 gave the definitions somewhere to come from, and something to read them.**
+Golden Thread has **no plugin runtime** — nobody's code runs on your machine as a
+third-party add-on. Contributions arrive as **packs**: plain JSON data, reviewed and
+merged into gt itself, after which they are first-party and held to the same release
+gate as everything else. See [SUBMISSIONS.md](SUBMISSIONS.md).
+
+The packs now have consumers. **`/gt:gt-scan`** checks code against the language
+definitions in effect on this machine — and knows nothing about any language itself, so
+four small packs teach it one it has never seen, with no code change. **`/gt:gt-optimize`**
+reports vault content that costs context and earns nothing back. **`/gt:gt-handoff`** (now `/gt:gt-create handoff`)
+writes the next session a handoff that marks what it must not assume. **`/gt:gt-allin`**
+runs every check and tells you how many actually *ran*, and **`/gt:gt-allin-commit`**
+commits only once a passing test receipt covers every staged file.
+
+A definition you disagree with is switched off from your own vault:
+`{"retract": [{"lang": "go"}]}`. Only your packs may retract, so a contributed pack can
+never retire someone else's definition.
+
+### 0.15.0
+
+**0.15.0 made gt a small core plus six optional modules**, and an upgrade no longer
+changes anything you wrote without saying so and asking. Three commands moved
+(`/gt:gt-watch` → `/gt-watch:gt-watch`, `/gt:gt-farm` → `/gt-farm:gt-farm`,
+`/gt:gt-demo` → `/gt-demo:gt-demo`), and the installer tells you. New with it: the vault
+records how knowledge moves as events, and **`/gt-flow:gt-flow` draws it** — see
+[Seeing how knowledge moved](#seeing-how-knowledge-moved). Choose modules with
+`install.sh --list-modules`, `--without <name>` and `--with <name>`; details in the
+[CHANGELOG](CHANGELOG.md).
+
+### 0.12.5
+
+**Also new in 0.12.5:** a `git commit` carrying code whose tests have not been seen to
+pass is **refused**. Evidence is a receipt written by your test run (`tests/run.sh` and
+`dev/release-check.sh` write their own; any project can with `gt_test_receipt.py record
+--ok`). If a repo has no tests, exempt it once with `touch .gt-no-test-gate`; for a
+single commit, `GT_TEST_GATE=off git commit …`; to switch it off entirely,
+`gt_settings.py set test_gate off`. Docs-only commits are never blocked.
+
+`parallel_max` defaults to `auto` — as many workers as the machine allows, and never
+more than there are units of work. Cap it before a long run if you need the machine to
+stay responsive for something else, if you are on battery, or if a remote end is
+rate-limited. `off` is the full stop: nothing runs in parallel and the rule is not
+asserted at all.
+
+### 0.12.4
+
+**Since 0.12.4, work runs in parallel by default, and you will notice it.** A Core rule now
+asks for divisible work to be split across your processors instead of crawling through
+one core, and the tools here honour it: `tests/run.sh` and `dev/render-pdfs.sh` fan out,
+and so will anything Claude writes while the rule is active. **The first sign is
+usually your fans** — a suite that used to hold one core at 100% now holds sixteen at
+400%+, and Activity Monitor fills with `python3` or `Google Chrome` processes that all
+disappear when the run ends. That is the feature working, not a runaway job. The
+measurement behind it: the test suite went from 509s to 108s, 4.7x.
+
+**You are in charge of how much of your machine it may use.**
+
+```bash
+gt_settings.py set parallel_max 4      # never more than 4 workers, whatever the work
+gt_settings.py set parallel_work off   # serial, and the Core rule stops being injected
+gt_settings.py show                    # what is currently allowed
+```
+
+## Feedback
+
+If you are using Golden Thread, or tried it and bounced off, I would like to hear about
+it. Questions, ideas, and "this worked for me" belong in
+[Discussions](https://github.com/shaven/golden-thread/discussions). Bugs and anything
+that behaved differently from the documentation belong in
+[Issues](https://github.com/shaven/golden-thread/issues). Both are read.
 
 ## License
 

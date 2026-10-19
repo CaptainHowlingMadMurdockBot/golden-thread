@@ -5,134 +5,6 @@
 
 A Claude Code plugin that turns an Obsidian vault into the single source of truth for all AI memory across every project and every session.
 
-
-> [!IMPORTANT]
-> **0.21.5: the install guide in `/gt:gt-help` names the vault folder gt suggests, `~/GoldenThread`.**
->
-> **0.21.4: connect an MCP service in a few steps, personas that shape the session, a First day
-> walkthrough and role guides, install one module, a safer default vault, MCP over stdio, and the
-> prompt install on Windows.** `install.sh --only NAME` adds or updates one module and nothing else;
-> the default vault is `~/GoldenThread`, and a vault in Documents or on a synced drive gets a warning.
-> Each persona now names the commands gt offers first, which session-start sections come first and
-> the LOTR templates it suggests; `/gt:gt-help` shows them on a guide per role.
-> Token economy: a context nudge, `auto_compact`, the Core rules sent once, long output kept in a file,
-> vault answers and a farm ladder on your own hardware. New optional module `gt-workflow`; `lotr pull`;
-> `gt_doctor.py testing` for blocked test runs; paths checked before they are asserted.
-> `lotr template guide|new|check|list` builds a connection template from a saved docs page;
-> `lotr add-stdio` fronts a local MCP server that runs as a program. **gt-lotr 0.5.0:** nine template
-> archetypes, a research run (`/gt-lotr:gt-lotr-research`) and an execution run (`lotr setup NAME`), and a
-> template catalog released separately from gt (`lotr template update`). Windows fixes include three
-> security fixes (terminal-presence guards, single-use action tokens, Git Bash paths in the paranoid
-> guard). 0.21.3 added the install from the Claude prompt (`/gt:gt-setup`) and capture-then-compact
-> for idle sessions. See the [CHANGELOG](../CHANGELOG.md).
->
-> **0.21.0: the install asks every choice; hooks ship with the plugins; a `paranoid` group, single-use
-> action tokens and I/O brokers; a token profile; the gt pane; `/gt:gt-help`.**
-> `install.sh --questions` lists every install question, security first (`--token-profile`,
-> `--reply-length`, `--persona-aligned`, `--sandbox-mode`, `--paranoid`, `--with pane`, `--open-guide`,
-> `--answers FILE`); off a terminal a new install with a security question unanswered exits 5.
-> Hooks come from each plugin's `hooks/hooks.json` on Claude Code 2.1.136 or newer. **Breaking:**
-> `/gt:gt-close` now closes the session; completing a project, task or handoff is `/gt:gt-complete`.
-> See the [CHANGELOG](../CHANGELOG.md), [INSTALL.md](INSTALL.md) and [SECURITY.md](SECURITY.md) section 10.
->
-> **0.20.4: a fingerprint before every push (Touch ID or Windows Hello) and on every commit (macOS only;
-> Windows Hello signing is planned for 0.20.5), all off by default.**
-> `push_fingerprint`, `push_fingerprint_seal_token` and `commit_fingerprint`, for the repos in
-> `push_fingerprint_repos`, on github.com or GitHub Enterprise. What each one proves, and what it does not:
-> [SECURITY.md](SECURITY.md) section 5.5a. 0.20.3 was a beta and was never released.
->
-> **0.20.1: gt unlock and gt sandbox mode (both off by default), and Windows, finished.** Turned on, agents need your
-> presence — TOTP plus Touch ID (macOS) or Windows Hello, optionally Microsoft Entra ID sign-in —
-> before they use LOTR connections, credentials, publishing or gt's own guards. Callers are
-> identified by the kernel, approvals are hardware signatures gt verifies itself, credentials can
-> be sealed under the Secure Enclave / TPM, and `gt_unlock.py verify` prints the level this machine
-> really runs at. *"Unlock proves a person was present and limits what agents can do on their own.
-> It is not anti-malware. If something already runs as you, it can wait for you to unlock."* Read
-> [`SECURITY.md`](SECURITY.md) before turning it on. **gt sandbox mode** has Claude Code's own sandbox
-> and permission rules keep the assistant's shell and file tools off the vault and gt's state;
-> the vault is read through gt's MCP server and written only through the queue (native Windows:
-> permission rules only — friction, not a boundary). Also: `python3` works in Claude's shell on
-> Windows, every gt write is LF, scheduled jobs run on Task Scheduler, the suite runs on Windows,
-> gt-lotr runs on Windows (0.3.0) with its MCP server started by the installer's Python, and a
-> failed install rolls back. On a current Claude Code each pipeline stage is a plugin agent with
-> its own model and effort (`gt:extract` … `gt:place`), ingest and promote stages can run as the
-> `gt:pipeline-stage` workflow with schema-checked output, and LOTR's tools declare their result
-> schema; an older Claude Code takes the earlier route. There is no published 0.19.3.
-
-> [!IMPORTANT]
-> **0.19.2: gt installs on native Windows.** Run `install.sh` from Git Bash, or the new
-> `install.cmd` from cmd.exe, PowerShell or Explorer. The installer finds a real Python 3.8+
-> (the Microsoft Store Python does not count, and it says what to install when that is all
-> there is), and the hooks run under Git Bash as Claude Code for Windows runs them. Nothing
-> changes on macOS or Linux. See *Windows* in [`INSTALL.md`](INSTALL.md).
-
-> [!IMPORTANT]
-> **0.19.1: right-sized models, SSO for LOTR, and fixes from installing 0.18.1.** (There is no
-> published 0.19.0.) **Model and effort per skill:** every skill declares fast/balanced/deep, and the
-> installer writes a profile into the installed copies — `average` (haiku with no effort setting,
-> sonnet·medium, opus·high; a new install's default), `very-high` (opus·xhigh) or `inherit` —
-> with per-skill and per-plugin overrides (`gt_model_policy.py`) and a doctor `model-policy` row;
-> specialist agents run on the model their task needs (`agent_models`, haiku/sonnet/opus by tier).
-> **LOTR handles SSO:** `lotr connect <name> --url <mcp-url>` signs in to an OAuth MCP server from your own
-> terminal (native OAuth, gt-lotr 0.3.0). The refresh token is sealed when unlock is on, the server's hosts are
-> pinned, and sign-in refuses to run from inside Claude Code. Verified live against Linear; Google and Microsoft
-> are tested against fake servers only. `lotr add-mcp` still reuses an existing client's token by reference
-> (gt-lotr 0.2.0). **Recall:** `gt_bench.py recall` measures
-> how often lookup finds the right page; prompt hints (`vault_hints`, on by default since 0.21.0).
-> **Supersession and expiry** applied when notes are read (`gt_supersede.py`). **Fixes:** the
-> queue guard reads shell tokens and follows `cd`; nothing writes bytecode into the published copy; post-install
-> resolves the installed release from any path and every completed run writes its receipt; one
-> recorded interpreter for every launchd job; the commit gate fits a large repo; the Stop validator
-> no longer demands a timestamp from a turn that was never given one (the install-time alert).
-> After installing, restart and run `/gt:gt-upgrade`.
->
-> **0.18.1 had thirteen themes**; what changed and why is in the CHANGELOG, how to use each in the
-> MANUAL. **One verb per action:** `gt-create`, `gt-open`, `gt-list`, `gt-handle` and the new
-> `gt-complete` take the artifact (project, task, handoff) as their argument; the six old task and
-> handoff skills still work through 0.18.x as deprecated aliases. **A coding loop:** `gt-plan`
-> writes a phased plan and waits for approval; `gt-implement` runs it test-first and stops on red.
-> **Decisions you can trace:** ADR expiry and supersession fields, `gt_adr.py lineage`, and
-> `gt-brief` to draft a repo's `CLAUDE.md`. **Subtraction:** `gt-optimize` gains a `session` member
-> (prompt-cache cost), `--cost`, `--archive` and `--supersede`; `gt-minimize` prunes a session
-> before you cut it. **Write-back that checks itself:** contradictions, promotion candidates and a
-> research digest. **Returning after time away:** a catch-up brief in `gt-open` and *What Changed
-> This Session* in the handoff. **Install health and guards:** doctor rows `repo-target` and
-> `hooks-schema`, and a guard that refuses commits in another machine's checkout. **Checks modules
-> contribute:** `gt_check.py` hosts module checkers (`cannot-check` never passes) and `gt_apply.py`
-> is the only writer of their fixes. **Model intent:** skills declare `fast`/`balanced`/`deep`,
-> resolved by `gt_model.py`. **Across machines and outside sessions:** `gt-sync`, and reminders by
-> macOS notification, SMS/Discord or email (each off by default). Scans and ingests **resume** after
-> an interruption, from any session. **Release pipeline:** `gt_pipeline.py` gives a code repo
-> `release.sh`, generated from steps and gates as data. **Measured execution:** `gt_metrics.py`, a
-> load-aware test runner, scoped receipts on feature branches, `gt_bench.py`, and gt-optimize's
-> opt-in `execution` member. **Staged ingest and promote:** `gt_ingest_pipeline.py`. After installing, restart and run `/gt:gt-upgrade`.
->
-> Earlier: **0.17.11** made Core rule 1 queue-first (every vault write goes through the write
-> queue) and added the optional `gt-lotr` module; **0.17.2** added surfacing at session start and
-> the task and handoff skills. Every release is in the [CHANGELOG](../CHANGELOG.md).
-
-> [!NOTE]
-> **0.16.2: the Core rules are re-asserted after a compaction.** Hook-added context is
-> *summarised* during a compaction rather than re-injected from disk, so
-> `inject_core_rules.sh` is now registered on `SessionStart` with matcher `compact` as well
-> as on `UserPromptSubmit`. Scope it honestly: what was exposed was the **remainder of the
-> turn** in which an auto-compaction fired — `UserPromptSubmit` has no compaction exception,
-> so the next user prompt always restored the rules verbatim — and the **mechanical tier was
-> never affected**, because the `PreToolUse` guards and the `Stop` validator are
-> event-driven commands, not context. The full registration table is under *Install*.
->
-> Also in 0.16.2:
->
-> - **A module hook can declare a `timeout`** — whole seconds, 1 to 600. `SessionEnd` hooks
->   share a **1.5-second budget**, and a hook that runs over is cancelled **with its output
->   discarded**, which looks exactly like a hook that had nothing to say. The report card
->   declares 15 on `SessionEnd`.
-> - **The pack-submission licence check knows the current SPDX spellings.**
->   `GPL-3.0-or-later` — the identifier any modern licence scanner emits — is now refused
->   **as copyleft**, with that reason, instead of as an unrecognised identifier.
-> - **`/gt:gt-context`'s envelope is documented as *not* a security control.** It provides
->   identifiability, not protection — see *Packs and the registry* below.
-
 ## What It Does
 
 Instead of scattered `.claude/memory/` files and CLAUDE.md snippets that live and die per-session, Golden Thread gives every fact a permanent home in a structured vault. Knowledge flows up a hierarchy from session notes into the vault, and the right facts are always in scope when you need them.
@@ -279,6 +151,69 @@ python3 $FLOW/gt_flow.py render --vault <vault> [--project <slug>] [--since YYYY
 
 A vault older than 0.15.0 starts empty: `gt_events.py backfill --dry-run` shows the history
 it would recover from git and `log.md`. Use `--redact` before the page leaves your screen.
+
+---
+
+## Install
+
+See [INSTALL.md](INSTALL.md) for step-by-step instructions, including how to install from a GitHub release.
+
+```bash
+bash install.sh --vault <vault>     # gt plus every module that is on; then restart Claude Code
+bash install.sh --list-modules      # the eleven modules, each one's state and why
+bash install.sh --without demo      # leave one out; remembered
+```
+
+Re-running it upgrades from any older release to the newest, including vault upgrades when your
+vault is committed.
+
+Once installed, code in your own projects passes four gates by default before it reaches its
+repository — tests seen to pass, `/gt:gt-allin`, `/gt:gt-allin-commit` and the automatic commit
+guard — and gt never pushes. See the [MANUAL](MANUAL.md#default-release-gates-what-your-project-passes-before-it-reaches-its-repository).
+
+![Default release gates: tests seen to pass, gt-allin, gt-allin-commit and the commit guard, then your own push](docs/release-process.svg)
+
+A full install writes **sixteen hook registrations across fourteen scripts** into
+`~/.claude/settings.json`, from one declaration (`HOOK_REGISTRATIONS` in `gt_components.py`)
+that the installer registers from and the drift check compares against — so they cannot
+disagree about what "wired" means. `install.sh` owns ten of them: the five `SessionStart`
+reporters (`gt_components.py`, `gt_workers.py`, `gt_version_check.py`, `gt_push_check.py`
+and, since 0.17.2, `gt_surface.py`), `gt_state.py` twice (`UserPromptSubmit` and
+`PreCompact`), the `guard_protected_paths.sh` and — since 0.18.1 — `guard_foreign_checkout.sh`
+`PreToolUse` guards, which are installer-owned precisely because they are tied to no Core rule
+and need no vault to be wired, and — since 0.18.1 — `log_knowledge_read.sh` on `PostToolUse`
+(matcher `Read`), the Knowledge read log.
+
+The other six are the **enforcement** tier, wired by `/gt:gt-init` — **six registrations
+across five scripts**, because since 0.16.2 `inject_core_rules.sh` is registered twice and
+the two counts differ:
+
+| Event | Script | What it is for |
+|---|---|---|
+| `UserPromptSubmit` | `inject_core_rules.sh` | re-asserts the Core rules on every turn |
+| `SessionStart` (matcher `compact`) | `inject_core_rules.sh` | **new in 0.16.2** — re-asserts them after a compaction |
+| `Stop` | `validate_response.sh` | mechanical: validates the reply |
+| `PreToolUse` | `guard_session_claims.sh` | mechanical |
+| `PreToolUse` | `guard_vault_writes.sh` | mechanical |
+| `PreToolUse` | `guard_test_before_commit.sh` | mechanical |
+
+`inject_core_rules.sh` is wired twice on purpose. Hook-added context is *summarised* during a
+compaction rather than re-injected from disk, so before 0.16.2 the Core rules survived a
+compaction only as whatever the summariser chose to keep. The exposure was the **remainder of the
+turn** in which an auto-compaction fired — `UserPromptSubmit` has no compaction exception, so the
+next user prompt always restored them verbatim. The mechanical tier was never affected: the
+`PreToolUse` guards and the `Stop` validator are event-driven commands, not context.
+
+If you ever need to rewire them manually:
+
+```bash
+python3 <scripts>/vault_init.py install-core-rules --vault <vault>
+```
+
+### Standing behaviour: parallel work, and the gates
+
+These shipped earlier and are all on by default. They surprise people the
+first time, so they are written down here rather than only in the changelog.
 
 ---
 
@@ -464,129 +399,6 @@ How much Claude may run without asking: strict (the default), trust local, trust
 
 At every level above strict, Claude's Read tool is denied credential files (ssh keys, cloud and gh credentials, Claude Code's login, .env). That guards the Read tool only: from trust local up a shell command can still print a file, so Core rule 3 (no secret's value in the session) remains the line. These levels reduce prompts; they are not a security boundary.
 <!-- lockdown-chart:end -->
-
-## Install
-
-See [INSTALL.md](INSTALL.md) for step-by-step instructions, including how to install from a GitHub release.
-
-```bash
-bash install.sh --vault <vault>     # gt plus every module that is on; then restart Claude Code
-bash install.sh --list-modules      # the eleven modules, each one's state and why
-bash install.sh --without demo      # leave one out; remembered
-```
-
-Re-running it upgrades from any older release to the newest, including vault upgrades when your
-vault is committed.
-
-Once installed, code in your own projects passes four gates by default before it reaches its
-repository — tests seen to pass, `/gt:gt-allin`, `/gt:gt-allin-commit` and the automatic commit
-guard — and gt never pushes. See the [MANUAL](MANUAL.md#default-release-gates-what-your-project-passes-before-it-reaches-its-repository).
-
-![Default release gates: tests seen to pass, gt-allin, gt-allin-commit and the commit guard, then your own push](docs/release-process.svg)
-
-A full install writes **sixteen hook registrations across fourteen scripts** into
-`~/.claude/settings.json`, from one declaration (`HOOK_REGISTRATIONS` in `gt_components.py`)
-that the installer registers from and the drift check compares against — so they cannot
-disagree about what "wired" means. `install.sh` owns ten of them: the five `SessionStart`
-reporters (`gt_components.py`, `gt_workers.py`, `gt_version_check.py`, `gt_push_check.py`
-and, since 0.17.2, `gt_surface.py`), `gt_state.py` twice (`UserPromptSubmit` and
-`PreCompact`), the `guard_protected_paths.sh` and — since 0.18.1 — `guard_foreign_checkout.sh`
-`PreToolUse` guards, which are installer-owned precisely because they are tied to no Core rule
-and need no vault to be wired, and — since 0.18.1 — `log_knowledge_read.sh` on `PostToolUse`
-(matcher `Read`), the Knowledge read log.
-
-The other six are the **enforcement** tier, wired by `/gt:gt-init` — **six registrations
-across five scripts**, because since 0.16.2 `inject_core_rules.sh` is registered twice and
-the two counts differ:
-
-| Event | Script | What it is for |
-|---|---|---|
-| `UserPromptSubmit` | `inject_core_rules.sh` | re-asserts the Core rules on every turn |
-| `SessionStart` (matcher `compact`) | `inject_core_rules.sh` | **new in 0.16.2** — re-asserts them after a compaction |
-| `Stop` | `validate_response.sh` | mechanical: validates the reply |
-| `PreToolUse` | `guard_session_claims.sh` | mechanical |
-| `PreToolUse` | `guard_vault_writes.sh` | mechanical |
-| `PreToolUse` | `guard_test_before_commit.sh` | mechanical |
-
-`inject_core_rules.sh` is wired twice on purpose. Hook-added context is *summarised* during a
-compaction rather than re-injected from disk, so before 0.16.2 the Core rules survived a
-compaction only as whatever the summariser chose to keep. The exposure was the **remainder of the
-turn** in which an auto-compaction fired — `UserPromptSubmit` has no compaction exception, so the
-next user prompt always restored them verbatim. The mechanical tier was never affected: the
-`PreToolUse` guards and the `Stop` validator are event-driven commands, not context.
-
-If you ever need to rewire them manually:
-
-```bash
-python3 <scripts>/vault_init.py install-core-rules --vault <vault>
-```
-
-### Standing behaviour: parallel work, and the gates
-
-These shipped earlier and are all on by default. They surprise people the
-first time, so they are written down here rather than only in the changelog.
-
-> [!NOTE]
-> **Since 0.12.4, divisible work runs in parallel by default.** A Core rule asks for work
-> that splits into independent units to be spread across your processors instead of
-> crawling through one core, and the tools here honour it — `tests/run.sh` and
-> `dev/render-pdfs.sh` fan out, and so will anything Claude writes while the rule is
-> active. **The first sign is usually the fans**: many processes at once and CPU well
-> above 100%, all of it gone when the run ends. That is the feature, not a runaway job.
-> Measured on this suite: 509s to 108s, 4.7x.
->
-> You decide how much of the machine it may use:
->
-> ```bash
-> gt_settings.py set parallel_max 4      # never more than 4 workers
-> gt_settings.py set parallel_work off   # serial, and the rule stops being asserted
-> gt_settings.py show                    # what is allowed right now
-> ```
->
-> **Since 0.12.5:** a `git commit` carrying code whose tests have not been seen to
-> pass is **refused**. Evidence is a receipt written by your test run (`tests/run.sh` and
-> `dev/release-check.sh` write their own; any project can with `gt_test_receipt.py record
-> --what <suite> --ok`). If a repo has no tests, exempt it once with `touch .gt-no-test-gate`; for a
-> single commit, `GT_TEST_GATE=off git commit …`; to switch it off entirely,
-> `gt_settings.py set test_gate off`. Docs-only commits are never blocked.
->
-> **Since 0.17.0 the scanners run on three cadences, and only two of them block:**
->
-> | | What it looks at | What it does |
-> |---|---|---|
-> | `tests/run.sh` | the file set the scanners define | fails the run — and writes no receipt, so the test gate above will not license the commit either |
-> | the commit gate | the staged diff only | denies the commit |
-> | `gt_sweep.py` | the whole tree | **reports**, never blocks |
->
-> The narrow two are narrow deliberately: a commit gate that scanned the whole tree would
-> punish you for someone else's old code. But that means nothing ever re-examines what
-> nobody is touching — a rule added today never sees a file no one edits, and a credential
-> committed before the gate existed stays committed. The sweep is the answer to "what is
-> true about the tree as a whole", and because it can surface old debt it must never block:
-> a report you read on a Monday, not a wall in front of a commit.
->
-> **A commit is also checked for credentials.** `/gt:gt-init` seeds `.githooks/` in the
-> vault and points `core.hooksPath` at it; the `pre-commit` hook there runs `gt_secrets.py
-> --staged` over the staged blobs — the index, not the worktree, because `git add`-ing a
-> credential and then tidying the file in your editor leaves a clean worktree and a dirty
-> commit. It is the only hook gt ships that **fails closed**: "could not run" refuses the
-> commit, because a credential in git history is in every clone, fork and backup
-> immediately and the only real remedy is rotating it. A finding is `path:line`, a rule id
-> and a **length** — never the value. If that gate passes, `gt_scan_code.py --staged` runs
-> after it; there a real finding blocks, but a rule skipped because this machine lacks an
-> optional evaluator tier is reported and allowed through, since blocking on it would
-> refuse every commit on every machine without `ast_grep_py`.
->
-> Findings you have examined and accepted belong in a baseline —
-> `.gt/secrets-baseline.json` and `.gt/code-baseline.json`, which the hook picks up if they
-> exist — not in an escape. The escapes are `git commit --no-verify` for one commit, and
-> `git config gt.secretsgate off` for this clone, which prints that it is off on every
-> commit: a gate you have forgotten you disabled is indistinguishable from one that works.
-> Recording each commit's verdict into the vault is opt-in per clone
-> (`git config gt.checkreport on`), because a hook that writes to the vault on every commit
-> in every repo on the machine is a side effect nobody asked for.
-
----
 
 ## Typical Session Pattern
 
@@ -873,6 +685,216 @@ Two scripts in `golden-thread-wiki` come directly from Jonathan's work:
   diff baseline; web-only sources are flagged for the LLM to compare.
 
 **Sergey Kryvets** recommended adding a visualization tool to Golden Thread — a great idea that became **gt-visualize**: the 3D code city, the scroll-driven explainers that show how a system's parts work together, publishing, and the guided walkthrough. Thank you, Sergey.
+
+## Version History
+
+Newest first. Each entry is the note that used to sit at the top of this file.
+
+### 0.21.5
+
+**0.21.5: the install guide in `/gt:gt-help` names the vault folder gt suggests, `~/GoldenThread`.**
+
+### 0.21.4
+
+**0.21.4: connect an MCP service in a few steps, personas that shape the session, a First day
+walkthrough and role guides, install one module, a safer default vault, MCP over stdio, and the
+prompt install on Windows.** `install.sh --only NAME` adds or updates one module and nothing else;
+the default vault is `~/GoldenThread`, and a vault in Documents or on a synced drive gets a warning.
+Each persona now names the commands gt offers first, which session-start sections come first and
+the LOTR templates it suggests; `/gt:gt-help` shows them on a guide per role.
+Token economy: a context nudge, `auto_compact`, the Core rules sent once, long output kept in a file,
+vault answers and a farm ladder on your own hardware. New optional module `gt-workflow`; `lotr pull`;
+`gt_doctor.py testing` for blocked test runs; paths checked before they are asserted.
+`lotr template guide|new|check|list` builds a connection template from a saved docs page;
+`lotr add-stdio` fronts a local MCP server that runs as a program. **gt-lotr 0.5.0:** nine template
+archetypes, a research run (`/gt-lotr:gt-lotr-research`) and an execution run (`lotr setup NAME`), and a
+template catalog released separately from gt (`lotr template update`). Windows fixes include three
+security fixes (terminal-presence guards, single-use action tokens, Git Bash paths in the paranoid
+guard). 0.21.3 added the install from the Claude prompt (`/gt:gt-setup`) and capture-then-compact
+for idle sessions. See the [CHANGELOG](../CHANGELOG.md).
+
+### 0.21.0
+
+**0.21.0: the install asks every choice; hooks ship with the plugins; a `paranoid` group, single-use
+action tokens and I/O brokers; a token profile; the gt pane; `/gt:gt-help`.**
+`install.sh --questions` lists every install question, security first (`--token-profile`,
+`--reply-length`, `--persona-aligned`, `--sandbox-mode`, `--paranoid`, `--with pane`, `--open-guide`,
+`--answers FILE`); off a terminal a new install with a security question unanswered exits 5.
+Hooks come from each plugin's `hooks/hooks.json` on Claude Code 2.1.136 or newer. **Breaking:**
+`/gt:gt-close` now closes the session; completing a project, task or handoff is `/gt:gt-complete`.
+See the [CHANGELOG](../CHANGELOG.md), [INSTALL.md](INSTALL.md) and [SECURITY.md](SECURITY.md) section 10.
+
+### 0.20.4
+
+**0.20.4: a fingerprint before every push (Touch ID or Windows Hello) and on every commit (macOS only;
+Windows Hello signing is planned for 0.20.5), all off by default.**
+`push_fingerprint`, `push_fingerprint_seal_token` and `commit_fingerprint`, for the repos in
+`push_fingerprint_repos`, on github.com or GitHub Enterprise. What each one proves, and what it does not:
+[SECURITY.md](SECURITY.md) section 5.5a. 0.20.3 was a beta and was never released.
+
+### 0.20.1
+
+**0.20.1: gt unlock and gt sandbox mode (both off by default), and Windows, finished.** Turned on, agents need your
+presence — TOTP plus Touch ID (macOS) or Windows Hello, optionally Microsoft Entra ID sign-in —
+before they use LOTR connections, credentials, publishing or gt's own guards. Callers are
+identified by the kernel, approvals are hardware signatures gt verifies itself, credentials can
+be sealed under the Secure Enclave / TPM, and `gt_unlock.py verify` prints the level this machine
+really runs at. *"Unlock proves a person was present and limits what agents can do on their own.
+It is not anti-malware. If something already runs as you, it can wait for you to unlock."* Read
+[`SECURITY.md`](SECURITY.md) before turning it on. **gt sandbox mode** has Claude Code's own sandbox
+and permission rules keep the assistant's shell and file tools off the vault and gt's state;
+the vault is read through gt's MCP server and written only through the queue (native Windows:
+permission rules only — friction, not a boundary). Also: `python3` works in Claude's shell on
+Windows, every gt write is LF, scheduled jobs run on Task Scheduler, the suite runs on Windows,
+gt-lotr runs on Windows (0.3.0) with its MCP server started by the installer's Python, and a
+failed install rolls back. On a current Claude Code each pipeline stage is a plugin agent with
+its own model and effort (`gt:extract` … `gt:place`), ingest and promote stages can run as the
+`gt:pipeline-stage` workflow with schema-checked output, and LOTR's tools declare their result
+schema; an older Claude Code takes the earlier route. There is no published 0.19.3.
+
+### 0.19.2
+
+**0.19.2: gt installs on native Windows.** Run `install.sh` from Git Bash, or the new
+`install.cmd` from cmd.exe, PowerShell or Explorer. The installer finds a real Python 3.8+
+(the Microsoft Store Python does not count, and it says what to install when that is all
+there is), and the hooks run under Git Bash as Claude Code for Windows runs them. Nothing
+changes on macOS or Linux. See *Windows* in [`INSTALL.md`](INSTALL.md).
+
+### 0.19.1
+
+**0.19.1: right-sized models, SSO for LOTR, and fixes from installing 0.18.1.** (There is no
+published 0.19.0.) **Model and effort per skill:** every skill declares fast/balanced/deep, and the
+installer writes a profile into the installed copies — `average` (haiku with no effort setting,
+sonnet·medium, opus·high; a new install's default), `very-high` (opus·xhigh) or `inherit` —
+with per-skill and per-plugin overrides (`gt_model_policy.py`) and a doctor `model-policy` row;
+specialist agents run on the model their task needs (`agent_models`, haiku/sonnet/opus by tier).
+**LOTR handles SSO:** `lotr connect <name> --url <mcp-url>` signs in to an OAuth MCP server from your own
+terminal (native OAuth, gt-lotr 0.3.0). The refresh token is sealed when unlock is on, the server's hosts are
+pinned, and sign-in refuses to run from inside Claude Code. Verified live against Linear; Google and Microsoft
+are tested against fake servers only. `lotr add-mcp` still reuses an existing client's token by reference
+(gt-lotr 0.2.0). **Recall:** `gt_bench.py recall` measures
+how often lookup finds the right page; prompt hints (`vault_hints`, on by default since 0.21.0).
+**Supersession and expiry** applied when notes are read (`gt_supersede.py`). **Fixes:** the
+queue guard reads shell tokens and follows `cd`; nothing writes bytecode into the published copy; post-install
+resolves the installed release from any path and every completed run writes its receipt; one
+recorded interpreter for every launchd job; the commit gate fits a large repo; the Stop validator
+no longer demands a timestamp from a turn that was never given one (the install-time alert).
+After installing, restart and run `/gt:gt-upgrade`.
+
+### 0.18.1
+
+**0.18.1 had thirteen themes**; what changed and why is in the CHANGELOG, how to use each in the
+MANUAL. **One verb per action:** `gt-create`, `gt-open`, `gt-list`, `gt-handle` and the new
+`gt-complete` take the artifact (project, task, handoff) as their argument; the six old task and
+handoff skills still work through 0.18.x as deprecated aliases. **A coding loop:** `gt-plan`
+writes a phased plan and waits for approval; `gt-implement` runs it test-first and stops on red.
+**Decisions you can trace:** ADR expiry and supersession fields, `gt_adr.py lineage`, and
+`gt-brief` to draft a repo's `CLAUDE.md`. **Subtraction:** `gt-optimize` gains a `session` member
+(prompt-cache cost), `--cost`, `--archive` and `--supersede`; `gt-minimize` prunes a session
+before you cut it. **Write-back that checks itself:** contradictions, promotion candidates and a
+research digest. **Returning after time away:** a catch-up brief in `gt-open` and *What Changed
+This Session* in the handoff. **Install health and guards:** doctor rows `repo-target` and
+`hooks-schema`, and a guard that refuses commits in another machine's checkout. **Checks modules
+contribute:** `gt_check.py` hosts module checkers (`cannot-check` never passes) and `gt_apply.py`
+is the only writer of their fixes. **Model intent:** skills declare `fast`/`balanced`/`deep`,
+resolved by `gt_model.py`. **Across machines and outside sessions:** `gt-sync`, and reminders by
+macOS notification, SMS/Discord or email (each off by default). Scans and ingests **resume** after
+an interruption, from any session. **Release pipeline:** `gt_pipeline.py` gives a code repo
+`release.sh`, generated from steps and gates as data. **Measured execution:** `gt_metrics.py`, a
+load-aware test runner, scoped receipts on feature branches, `gt_bench.py`, and gt-optimize's
+opt-in `execution` member. **Staged ingest and promote:** `gt_ingest_pipeline.py`. After installing, restart and run `/gt:gt-upgrade`.
+
+Earlier: **0.17.11** made Core rule 1 queue-first (every vault write goes through the write
+queue) and added the optional `gt-lotr` module; **0.17.2** added surfacing at session start and
+the task and handoff skills. Every release is in the [CHANGELOG](../CHANGELOG.md).
+
+### 0.17.0
+
+**Since 0.17.0 the scanners run on three cadences, and only two of them block:**
+
+| | What it looks at | What it does |
+|---|---|---|
+| `tests/run.sh` | the file set the scanners define | fails the run — and writes no receipt, so the test gate above will not license the commit either |
+| the commit gate | the staged diff only | denies the commit |
+| `gt_sweep.py` | the whole tree | **reports**, never blocks |
+
+The narrow two are narrow deliberately: a commit gate that scanned the whole tree would
+punish you for someone else's old code. But that means nothing ever re-examines what
+nobody is touching — a rule added today never sees a file no one edits, and a credential
+committed before the gate existed stays committed. The sweep is the answer to "what is
+true about the tree as a whole", and because it can surface old debt it must never block:
+a report you read on a Monday, not a wall in front of a commit.
+
+**A commit is also checked for credentials.** `/gt:gt-init` seeds `.githooks/` in the
+vault and points `core.hooksPath` at it; the `pre-commit` hook there runs `gt_secrets.py
+--staged` over the staged blobs — the index, not the worktree, because `git add`-ing a
+credential and then tidying the file in your editor leaves a clean worktree and a dirty
+commit. It is the only hook gt ships that **fails closed**: "could not run" refuses the
+commit, because a credential in git history is in every clone, fork and backup
+immediately and the only real remedy is rotating it. A finding is `path:line`, a rule id
+and a **length** — never the value. If that gate passes, `gt_scan_code.py --staged` runs
+after it; there a real finding blocks, but a rule skipped because this machine lacks an
+optional evaluator tier is reported and allowed through, since blocking on it would
+refuse every commit on every machine without `ast_grep_py`.
+
+Findings you have examined and accepted belong in a baseline —
+`.gt/secrets-baseline.json` and `.gt/code-baseline.json`, which the hook picks up if they
+exist — not in an escape. The escapes are `git commit --no-verify` for one commit, and
+`git config gt.secretsgate off` for this clone, which prints that it is off on every
+commit: a gate you have forgotten you disabled is indistinguishable from one that works.
+Recording each commit's verdict into the vault is opt-in per clone
+(`git config gt.checkreport on`), because a hook that writes to the vault on every commit
+in every repo on the machine is a side effect nobody asked for.
+
+### 0.16.2
+
+**0.16.2: the Core rules are re-asserted after a compaction.** Hook-added context is
+*summarised* during a compaction rather than re-injected from disk, so
+`inject_core_rules.sh` is now registered on `SessionStart` with matcher `compact` as well
+as on `UserPromptSubmit`. Scope it honestly: what was exposed was the **remainder of the
+turn** in which an auto-compaction fired — `UserPromptSubmit` has no compaction exception,
+so the next user prompt always restored the rules verbatim — and the **mechanical tier was
+never affected**, because the `PreToolUse` guards and the `Stop` validator are
+event-driven commands, not context. The full registration table is under *Install*.
+
+Also in 0.16.2:
+
+- **A module hook can declare a `timeout`** — whole seconds, 1 to 600. `SessionEnd` hooks
+  share a **1.5-second budget**, and a hook that runs over is cancelled **with its output
+  discarded**, which looks exactly like a hook that had nothing to say. The report card
+  declares 15 on `SessionEnd`.
+- **The pack-submission licence check knows the current SPDX spellings.**
+  `GPL-3.0-or-later` — the identifier any modern licence scanner emits — is now refused
+  **as copyleft**, with that reason, instead of as an unrecognised identifier.
+- **`/gt:gt-context`'s envelope is documented as *not* a security control.** It provides
+  identifiability, not protection — see *Packs and the registry* below.
+
+### 0.12.5
+
+**Since 0.12.5:** a `git commit` carrying code whose tests have not been seen to
+pass is **refused**. Evidence is a receipt written by your test run (`tests/run.sh` and
+`dev/release-check.sh` write their own; any project can with `gt_test_receipt.py record
+--what <suite> --ok`). If a repo has no tests, exempt it once with `touch .gt-no-test-gate`; for a
+single commit, `GT_TEST_GATE=off git commit …`; to switch it off entirely,
+`gt_settings.py set test_gate off`. Docs-only commits are never blocked.
+
+### 0.12.4
+
+**Since 0.12.4, divisible work runs in parallel by default.** A Core rule asks for work
+that splits into independent units to be spread across your processors instead of
+crawling through one core, and the tools here honour it — `tests/run.sh` and
+`dev/render-pdfs.sh` fan out, and so will anything Claude writes while the rule is
+active. **The first sign is usually the fans**: many processes at once and CPU well
+above 100%, all of it gone when the run ends. That is the feature, not a runaway job.
+Measured on this suite: 509s to 108s, 4.7x.
+
+You decide how much of the machine it may use:
+
+```bash
+gt_settings.py set parallel_max 4      # never more than 4 workers
+gt_settings.py set parallel_work off   # serial, and the rule stops being asserted
+gt_settings.py show                    # what is allowed right now
+```
 
 ## License
 

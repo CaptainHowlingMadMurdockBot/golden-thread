@@ -305,6 +305,32 @@ const STEPS = [
              T("out",{g:4,s:"Where should your vault live?\n❯ ~/GoldenThread (recommended)\n  A vault I already have",c:"acc",src:"real-text"}),
              T("type",{g:5,s:"/exit"}), T("term",{g:5}), T("type",{g:5,s:"claude"}) ] } },
 
+ { id:"lotr", title:"Optional: add LOTR",
+   why:"LOTR is one gateway in front of GitHub, Jira, Microsoft 365 and other services, so Claude can reach them without you pasting credentials into a session. It is off in a fresh install; add it only if you want it.",
+   check:{mac:"claude plugin list", win:"claude plugin list", ok:"gt-lotr in the list"},
+   both:{ guide:[
+     {t:"In a terminal (not inside Claude), add the LOTR plugin:", cmd:"claude plugin install gt-lotr@golden-thread-plugin"},
+     {t:"Wait for Successfully installed plugin. Then start claude again so it loads.", cmd:"claude"},
+     {t:"At Claude's > prompt, ask for the gateway setup. It shows what LOTR can reach and walks you through adding a connection:", cmd:"/gt-lotr:gt-lotr", where:"Type into Claude"},
+     {t:"Add one connection at a time (GitHub, Jira, Microsoft 365). Sending, merging and deleting always ask you first."}],
+     beats:[ T("term",{g:0}), T("type",{g:0,s:"claude plugin install gt-lotr@golden-thread-plugin"}),
+             T("out",{g:1,s:"Installing plugin \"gt-lotr@golden-thread-plugin\"...✔ Successfully installed plugin: gt-lotr@golden-thread-plugin (scope: user)",c:"ok",src:"nc"}),
+             T("type",{g:1,s:"claude"}), T("claude",{g:2}), T("type",{g:2,s:"/gt-lotr:gt-lotr"}),
+             T("out",{g:3,s:"LOTR gateway: no connections yet.\nAdd one? GitHub · Jira · Microsoft 365 · other",c:"acc",src:"nc"}) ] } },
+
+ { id:"farm", title:"Optional: add farm",
+   why:"Farm hands bulk or mechanical work to another AI service, or to an engine on your own hardware, as a self-contained work packet. It is off in a fresh install; add it only if you want it.",
+   check:{mac:"claude plugin list", win:"claude plugin list", ok:"gt-farm in the list"},
+   both:{ guide:[
+     {t:"In a terminal (not inside Claude), add the farm plugin:", cmd:"claude plugin install gt-farm@golden-thread-plugin"},
+     {t:"Wait for Successfully installed plugin. Then start claude again so it loads.", cmd:"claude"},
+     {t:"At Claude's > prompt, say what you want to hand off, or ask what can be farmed out:", cmd:"what can I farm out", where:"Type into Claude"},
+     {t:"Claude writes a work packet with a strict return contract. You send it to the other service, and the result comes back for Claude to check."}],
+     beats:[ T("term",{g:0}), T("type",{g:0,s:"claude plugin install gt-farm@golden-thread-plugin"}),
+             T("out",{g:1,s:"Installing plugin \"gt-farm@golden-thread-plugin\"...✔ Successfully installed plugin: gt-farm@golden-thread-plugin (scope: user)",c:"ok",src:"nc"}),
+             T("type",{g:1,s:"claude"}), T("claude",{g:2}), T("type",{g:2,s:"what can I farm out"}),
+             T("out",{g:3,s:"I can write a self-contained work packet for any bulk or mechanical task, with a strict return contract.",c:"acc",src:"nc"}) ] } },
+
  { id:"obsidian", title:"Install Obsidian",
    why:"Obsidian is a free notes app. It shows your Golden Thread vault as ordinary, readable notes.",
    mac:{ guide:[
