@@ -1,8 +1,12 @@
-"""Golden Thread Hermes plugin entry points.
+"""Golden Thread integration for Hermes Agent.
 
-Exports:
-  - register_memory_provider(ctx): registers the Golden Thread MemoryProvider.
-  - register(ctx): registers the Observer Hooks guardrail plugin.
+Provides:
+- A memory provider that exposes 52 Golden Thread commands as Hermes tools.
+  All 39 canonical `/gt:gt-*` commands from the Claude Code plugin are present;
+  the remaining 13 are Hermes-specific helpers, aliases, or guidance stubs for
+  UI-only / external-subsystem commands that have no direct Hermes equivalent.
+- Guardrails enforcing Golden Thread Core principles (body trust, anti-diet,
+  anti-weight-stigma, harm reduction).
 """
 
 from __future__ import annotations
@@ -10,12 +14,4 @@ from __future__ import annotations
 from golden_thread_hermes.memory.provider import GoldenThreadMemoryProvider
 from golden_thread_hermes.guardrails import register as register_guardrails
 
-
-def register_memory_provider(ctx) -> None:
-    """Hermes memory-provider discovery entry point."""
-    ctx.register_memory_provider(GoldenThreadMemoryProvider())
-
-
-def register(ctx) -> None:
-    """Hermes general-plugin / Observer Hooks entry point."""
-    register_guardrails(ctx)
+__all__ = ["GoldenThreadMemoryProvider", "register_guardrails"]

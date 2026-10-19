@@ -28,7 +28,8 @@ def test_gt_create_and_work(tmp_vault):
     res = json.loads(p.handle_tool_call('gt_create', {'name': 'other', 'idea': 'second project'}))
     assert res['project'] == 'other'
     res2 = json.loads(p.handle_tool_call('gt_work', {'summary': 'added detail'}))
-    assert res2['logged'] is True
+    assert res2['status'] == 'logged'
+    assert res2['project'] == 'other'
     assert 'added detail' in (tmp_vault / 'Projects' / 'other' / 'Log').glob('*.md').__next__().read_text()
 
 def test_gt_decide(tmp_vault):
