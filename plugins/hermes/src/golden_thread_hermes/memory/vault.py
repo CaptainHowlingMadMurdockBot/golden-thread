@@ -505,22 +505,15 @@ class Vault:
         return {"status": "ok", "note": "Wiki refresh is manual in Hermes; re-run gt_wiki_ingest with updated sources."}
 
     async def watch_command(self, repo: str = "", action: str = "add") -> Dict[str, Any]:
-        watches = self.root / ".gt" / "watches.yaml"
-        self.ensure_dir(watches.parent)
-        import yaml
-        data: Dict[str, Any] = {}
-        if watches.exists():
-            with open(watches, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-        watched = set(data.get("repos", []))
+        """Use upstream gt-watch to track a git repo in the vault."""
+        from ..watch import watch_add, watch_remove, watch_list
+
+        vault_path = str(self.root)
         if action == "add" and repo:
-            watched.add(repo)
-        elif action == "remove" and repo:
-            watched.discard(repo)
-        data["repos"] = sorted(watched)
-        with open(watches, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, default_flow_style=False)
-        return {"status": "ok", "repos": data["repos"]}
+            return watch_add(url=repo, vault_path=vault_path)
+        if action == "remove" and repo:
+            return watch_remove(slug=repo, vault_path=vault_path)
+        return watch_list(vault_path=vault_path)
 
     async def farm_command(self, task: str) -> Dict[str, Any]:
         farm_dir = self.root / ".gt" / "farm"
