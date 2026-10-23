@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "golden-thread-hermes"
-version = "0.1.0"
-description = "Hermes memory provider + Observer Hooks guardrails for Golden Thread"
+version = "0.2.0"
+description = "Hermes memory provider + Observer Hooks guardrails + gt-watch for Golden Thread"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
