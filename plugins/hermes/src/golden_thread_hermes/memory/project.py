@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from . import canonical
 from .vault import Vault
 
 
@@ -61,17 +62,9 @@ class ProjectManager:
         self.vault.ensure_dir(project_dir / "Memory")
         self.vault.ensure_dir(project_dir / "Tasks")
         self.vault.ensure_dir(project_dir / "Handoffs")
-        (project_dir / "idea.md").write_text(
-            f"# {name}\n\n{idea}\n", encoding="utf-8"
-        )
-        (project_dir / "CONVENTIONS.md").write_text(
-            f"# CONVENTIONS\n\nProject-specific conventions for {name}.\n",
-            encoding="utf-8",
-        )
-        (project_dir / "runbook.md").write_text(
-            f"# Runbook: {name}\n\nOperational notes and recurring procedures.\n",
-            encoding="utf-8",
-        )
+        self.vault._write(f"Projects/{slug}/idea.md", f"# {name}\n\n{idea}\n", op="replace-file")
+        self.vault._write(f"Projects/{slug}/CONVENTIONS.md", f"# CONVENTIONS\n\nProject-specific conventions for {name}.\n", op="replace-file")
+        self.vault._write(f"Projects/{slug}/runbook.md", f"# Runbook: {name}\n\nOperational notes and recurring procedures.\n", op="replace-file")
         self.active_slug = slug
         return slug
 
@@ -89,8 +82,7 @@ class ProjectManager:
         log_file = log_dir / f"{today}.md"
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         entry = f"- {ts}: {summary}\n"
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(entry)
+        self.vault._write(f"Projects/{self.active_slug}/Log/{today}.md", entry, op="append")
 
     async def work_command(self, summary: str) -> Dict[str, Any]:
         self.log(summary)
@@ -119,7 +111,7 @@ class ProjectManager:
             f"## Decision\n\n{decision}\n\n"
             f"## Consequences\n\n{consequences}\n"
         )
-        (decisions_dir / file_name).write_text(body, encoding="utf-8")
+        self.vault._write(f"Projects/{self.active_slug}/Decisions/{file_name}", body, op="replace-file")
         return adr_id
 
     async def decide_command(
@@ -138,12 +130,12 @@ class ProjectManager:
         self.vault.ensure_dir(mem_dir)
         file_path = mem_dir / f"{category}.md"
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        with open(file_path, "a", encoding="utf-8") as f:
-            f.write(f"- {ts}: {content}\n")
+        self.vault._write(f"Projects/{self.active_slug}/Memory/{category}.md", f"- {ts}: {content}\n", op="append")
 
     def read_context(self, max_lines: int = 400) -> str:
         if not self.active_slug:
             return ""
+        self.vault._drain_if_outstanding()
         project_dir = self.vault.project_path(self.active_slug)
         candidates = [
             project_dir / "idea.md",
@@ -181,13 +173,49 @@ class ProjectManager:
         return "\n".join(lines[:max_lines]).strip()
 
     def _tasks_and_handoffs_lines(self, project_dir: Path) -> List[str]:
+        """Context feed. Prefers canonical sources; legacy folders are labeled.
+
+        Canonical tasks: README.md ## Tasks via gt_task.py (the only model
+        gt_task.py/gt_tasks.py/TASKS.md can see). Canonical handoffs:
+        handoff/*.md via gt_handoff_status.py. Legacy Tasks/*.md and
+        Handoffs/*.md are shown as 'legacy' so sessions know to migrate them.
+        """
         lines: List[str] = []
+        vault = self.vault.root
+
+        # Canonical tasks
+        try:
+            tasks = canonical.list_tasks(vault, project_dir.name)
+            if tasks:
+                lines.append("## Open tasks (gt_task.py)")
+                for t in tasks[:8]:
+                    due = f" [due {t['due']}]" if t.get("due") else ""
+                    ref = f" [ref {t['ref']}]" if t.get("ref") else ""
+                    lines.append(f"- ({t.get('id')}) {t.get('text')}{due}{ref}")
+                lines.append("")
+        except canonical.CanonicalToolError:
+            pass
+
+        # Canonical handoffs
+        try:
+            handoffs = canonical.list_handoffs(vault, project_dir.name)
+            if handoffs:
+                lines.append("## Handoffs (gt_handoff_status.py)")
+                for h in handoffs[-5:]:
+                    note = f" — {h['note']}" if h.get("note") else ""
+                    lines.append(f"- {h.get('path')} [{h.get('status')}]"
+                                 f" open_items={h.get('open_items')}{note}")
+                lines.append("")
+        except canonical.CanonicalToolError:
+            pass
+
+        # Legacy fallback, clearly labeled
         tasks_dir = project_dir / "Tasks"
         if tasks_dir.exists():
             tasks = sorted(tasks_dir.glob("*.md"))
             open_tasks = [t for t in tasks if "[x]" not in t.read_text(encoding="utf-8")[:200]]
             if open_tasks:
-                lines.append("## Open tasks")
+                lines.append("## Open tasks (LEGACY Tasks/ folder — migrate)")
                 for t in open_tasks:
                     lines.append(f"- {t.stem}")
                 lines.append("")
@@ -195,7 +223,7 @@ class ProjectManager:
         if handoffs_dir.exists():
             handoffs = sorted(handoffs_dir.glob("*.md"))
             if handoffs:
-                lines.append("## Open handoffs")
+                lines.append("## Handoffs (LEGACY Handoffs/ folder — migrate)")
                 for h in handoffs[-5:]:
                     lines.append(f"- {h.stem}")
                 lines.append("")
@@ -228,7 +256,11 @@ class ProjectManager:
         }
 
     async def query_command(self, q: str, lineage: str = "") -> Dict[str, Any]:
-        return await self.vault.query(q, lineage=lineage, active_project=self.active_slug)
+        self.vault._drain_if_outstanding()
+        # Route through the vault's own read tool (gt_keyword_recall.py), not a
+        # naive substring scan: it honors index.md, stop-words, stemming, name
+        # weighting, and locked folders, exactly as gt-query does.
+        return await self.vault.keyword_recall(q, lineage=lineage, active_project=self.active_slug)
 
     async def handle_command(
         self,
@@ -236,33 +268,159 @@ class ProjectManager:
         item_id: str = "",
         action: str = "",
         reason: str = "",
+        until: str = "",
     ) -> Dict[str, Any]:
         self._require_active()
+        vault = self.vault.root
         project_dir = self.vault.project_path(self.active_slug)
-        folder = project_dir / ("Tasks" if kind == "tasks" else "Handoffs")
-        self.vault.ensure_dir(folder)
-        if not item_id:
-            items = sorted(folder.glob("*.md"))
-            return {
-                "status": "ok",
-                "kind": kind,
-                "count": len(items),
-                "items": [i.stem for i in items],
-            }
-        target = folder / f"{item_id}.md"
-        if not target.exists():
-            return {"status": "error", "detail": f"{kind} '{item_id}' not found"}
-        text = target.read_text(encoding="utf-8")
-        if action == "close":
-            new_text = text.replace("- [ ]", "- [x]", 1) + f"\n\nClosed: {datetime.now(timezone.utc).isoformat()}\n"
-            target.write_text(new_text, encoding="utf-8")
-            return {"status": "closed", "item": item_id}
-        if action == "drop":
-            if not reason:
-                return {"status": "error", "detail": "reason required to drop item"}
-            target.write_text(text + f"\n\nDropped: {datetime.now(timezone.utc).isoformat()} — {reason}\n", encoding="utf-8")
-            return {"status": "dropped", "item": item_id, "reason": reason}
-        return {"status": "ok", "item": item_id, "action": action or "view", "preview": text[:500]}
+
+        # ---------------- Canonical tasks (gt_task.py) ----------------
+        if kind == "tasks":
+            if not item_id:
+                try:
+                    items = canonical.list_tasks(vault, self.active_slug)
+                except canonical.CanonicalToolError as exc:
+                    return {"status": "error", "detail": str(exc)}
+                if not items:
+                    folder = project_dir / "Tasks"
+                    legacy = sorted(folder.glob("*.md")) if folder.exists() else []
+                    open_legacy = [t for t in legacy
+                                   if "[x]" not in t.read_text(encoding="utf-8")[:200]]
+                    return {
+                        "status": "ok", "kind": "tasks",
+                        "source": "legacy-fallback" if open_legacy else "gt_task.py",
+                        "count": len(open_legacy),
+                        "items": [
+                            {"id": t.stem, "source": "legacy-note",
+                             "note": "one-note-per-task in Tasks/ is invisible to "
+                                     "gt_task.py; migrate with "
+                                     "migration.migrate_project(vault, '<slug>')"}
+                            for t in open_legacy
+                        ],
+                    }
+                return {
+                    "status": "ok", "kind": "tasks", "source": "gt_task.py",
+                    "count": len(items),
+                    "items": [
+                        {"id": t.get("id"), "text": t.get("text"),
+                         "p": t.get("p"), "waiting": t.get("waiting"),
+                         "ref": t.get("ref"), "due": t.get("due")}
+                        for t in items
+                    ],
+                    "note": "ids are canonical (slug:LINE:HASH); act with "
+                            "action=done|drop|defer|shelve (defer needs until=YYYY-MM-DD)",
+                }
+            # Resolve the id against the canonical list first.
+            try:
+                tasks = canonical.list_tasks(vault, self.active_slug)
+            except canonical.CanonicalToolError as exc:
+                return {"status": "error", "detail": str(exc)}
+            match = next(
+                (t for t in tasks
+                 if t.get("id") == item_id
+                 or (canonical.is_canonical_task_id(item_id) and str(t.get("id")).endswith(item_id))),
+                None)
+            if match:
+                if not action:
+                    return {"status": "ok", "item": match.get("id"),
+                            "text": match.get("text"), "ref": match.get("ref"),
+                            "state": match.get("waiting"),
+                            "note": "add action=done|drop|defer|shelve"}
+                try:
+                    return canonical.task_action(vault, action, match["id"],
+                                                 reason=reason, until=until)
+                except canonical.CanonicalToolError as any_exc:
+                    return {"status": "error", "detail": str(any_exc)}
+            # Non-canonical id: legacy Tasks/ folder fallback.
+            folder = project_dir / "Tasks"
+            self.vault.ensure_dir(folder)
+            target = folder / f"{item_id}.md"
+            if not target.exists():
+                return {"status": "error",
+                        "detail": (f"task '{item_id}' not found in gt_task.py list "
+                                   f"or {folder}")}
+            text = target.read_text(encoding="utf-8")
+            if action == "close":
+                new_text = text.replace("- [ ]", "- [x]", 1) + \
+                    f"\n\nClosed: {datetime.now(timezone.utc).isoformat()}\n"
+                self.vault._write(f"Projects/{self.active_slug}/Tasks/{item_id}.md",
+                                  new_text, op="replace-file")
+                return {"status": "closed", "item": item_id, "source": "legacy"}
+            if action == "drop":
+                if not reason:
+                    return {"status": "error", "detail": "reason required to drop item"}
+                self.vault._write(f"Projects/{self.active_slug}/Tasks/{item_id}.md",
+                                  text + f"\n\nDropped: {datetime.now(timezone.utc).isoformat()} — {reason}\n",
+                                  op="replace-file")
+                return {"status": "dropped", "item": item_id, "reason": reason,
+                        "source": "legacy"}
+            return {"status": "ok", "item": item_id, "action": action or "view",
+                    "preview": text[:500], "source": "legacy",
+                    "note": "this is a legacy Tasks/ note — migrate with "
+                            "migration.migrate_project(vault, '<slug>')"}
+
+        # ---------------- Canonical handoffs (gt_handoff_status.py) ----------------
+        if kind == "handoffs":
+            if not item_id:
+                try:
+                    items = canonical.list_handoffs(vault, self.active_slug)
+                except canonical.CanonicalToolError as exc:
+                    return {"status": "error", "detail": str(exc)}
+                if not items:
+                    folder = project_dir / "Handoffs"
+                    legacy = sorted(folder.glob("*.md")) if folder.exists() else []
+                    return {
+                        "status": "ok", "kind": "handoffs",
+                        "source": "legacy-fallback" if legacy else "gt_handoff_status.py",
+                        "count": len(legacy),
+                        "items": [
+                            {"path": str(h.relative_to(vault)), "source": "legacy-note",
+                             "note": "uppercase Handoffs/ is invisible to "
+                                     "gt_handoff_status.py; migrate with "
+                                     "migration.migrate_project(vault, '<slug>')"}
+                            for h in legacy
+                        ],
+                    }
+                return {
+                    "status": "ok", "kind": "handoffs", "source": "gt_handoff_status.py",
+                    "count": len(items),
+                    "items": [
+                        {"path": i.get("path"), "status": i.get("status"),
+                         "recorded": i.get("recorded"),
+                         "open_items": i.get("open_items"), "note": i.get("note")}
+                        for i in items
+                    ],
+                }
+            # Item ops: normalize the id, then dispatch on action.
+            if not canonical.is_canonical_handoff_path(item_id):
+                item_id = canonical.to_handoff_rel(item_id)
+            try:
+                if action in ("handled", "deferred", "open", "mark"):
+                    status = "handled" if action in ("mark", "handled") else action
+                    return canonical.handoff_mark(vault, item_id, status,
+                                                  until=until, reason=reason)
+                if action == "resolve":
+                    if ":" in reason:
+                        as_, res_reason = reason.split(":", 1)
+                        res_reason = res_reason.strip()
+                    else:
+                        as_, res_reason = "closed", reason.strip()
+                    as_ = {"closed": "closed", "dropped": "dropped", "task": "task"}.get(
+                        as_.strip(), "closed")
+                    return canonical.handoff_resolve(vault, item_id, item=item_id.split("/")[-1],
+                                                     as_=as_, reason=res_reason)
+                if action == "close":
+                    return canonical.handoff_mark(vault, item_id, "handled",
+                                                  reason=reason or "closed via gt_handle")
+                if action in ("", "view"):
+                    return {"status": "ok", "handoff": item_id,
+                            "items": canonical.handoff_items(vault, item_id)}
+                return {"status": "error",
+                        "detail": f"unknown action '{action}' (handled|deferred|open|resolve|close|view)"}
+            except canonical.CanonicalToolError as exc:
+                return {"status": "error", "detail": str(exc)}
+
+        return {"status": "error", "detail": f"unknown kind '{kind}' (tasks|handoffs)"}
 
     async def complete_command(
         self,
@@ -271,20 +429,53 @@ class ProjectManager:
         move: bool = False,
     ) -> Dict[str, Any]:
         self._require_active()
+        vault = self.vault.root
         if kind == "project":
             # Mark project as complete in a handoff note.
             self.log(f"Project marked complete (move={move})")
             return {"status": "complete", "project": self.active_slug, "move": move}
-        folder = self.vault.project_path(self.active_slug) / ("Tasks" if kind == "task" else "Handoffs")
-        target = folder / f"{item_id}.md"
-        if not target.exists():
-            return {"status": "error", "detail": f"{kind} '{item_id}' not found"}
-        text = target.read_text(encoding="utf-8")
-        new_text = text.replace("- [ ]", "- [x]", 1) + f"\n\nCompleted: {datetime.now(timezone.utc).isoformat()}\n"
-        target.write_text(new_text, encoding="utf-8")
-        return {"status": "complete", "kind": kind, "item": item_id}
+        if kind == "task":
+            # Canonical task completion via gt_task.py done.
+            try:
+                tasks = canonical.list_tasks(vault, self.active_slug)
+            except canonical.CanonicalToolError as exc:
+                return {"status": "error", "detail": str(exc)}
+            match = next(
+                (t for t in tasks
+                 if t.get("id") == item_id
+                 or (canonical.is_canonical_task_id(item_id)
+                     and str(t.get("id")).endswith(item_id))),
+                None)
+            if match:
+                try:
+                    return canonical.task_action(vault, "done", match["id"])
+                except canonical.CanonicalToolError as exc:
+                    return {"status": "error", "detail": str(exc)}
+            # Legacy note fallback.
+            folder = self.vault.project_path(self.active_slug) / "Tasks"
+            target = folder / f"{item_id}.md"
+            if not target.exists():
+                return {"status": "error", "detail": f"task '{item_id}' not found"}
+            text = target.read_text(encoding="utf-8")
+            new_text = text.replace("- [ ]", "- [x]", 1) + \
+                f"\n\nCompleted: {datetime.now(timezone.utc).isoformat()}\n"
+            self.vault._write(f"Projects/{self.active_slug}/Tasks/{item_id}.md",
+                              new_text, op="replace-file")
+            return {"status": "complete", "kind": "task", "item": item_id,
+                    "source": "legacy"}
+        if kind == "handoff":
+            # Canonical handoff completion = mark handled; refuses if items open.
+            if not canonical.is_canonical_handoff_path(item_id):
+                item_id = canonical.to_handoff_rel(item_id)
+            try:
+                return canonical.handoff_mark(vault, item_id, "handled")
+            except canonical.CanonicalToolError as exc:
+                return {"status": "error", "detail": str(exc)}
+        return {"status": "error",
+                "detail": f"unknown kind '{kind}' (project|task|handoff)"}
 
     async def review_command(self) -> Dict[str, Any]:
+        self.vault._drain_if_outstanding()
         inbox = self.vault.inbox_path()
         if not inbox.exists():
             return {"status": "ok", "inbox_items": 0, "note": "No INBOX.md found"}
@@ -295,11 +486,9 @@ class ProjectManager:
         daily = self.vault.root / "Daily" / f"{today}.md"
         self.vault.ensure_dir(daily.parent)
         if items:
-            with open(daily, "a", encoding="utf-8") as f:
-                f.write(f"\n## Review {today}\n")
-                for it in items:
-                    f.write(f"- {it}\n")
-            inbox.write_text("# INBOX\n\n", encoding="utf-8")
+            append_body = f"\n## Review {today}\n" + "".join(f"- {it}\n" for it in items)
+            self.vault._write(f"Daily/{today}.md", append_body, op="append")
+            self.vault._write("Inbox.md", "# INBOX\n\n", op="replace-file")
         return {"status": "reviewed", "inbox_items": len(items), "daily": str(daily)}
 
     async def plan_command(self, requirement: str) -> Dict[str, Any]:
@@ -321,7 +510,7 @@ class ProjectManager:
             "6. Record decisions and close handoffs.\n\n"
             "status: draft\n"
         )
-        plan_file.write_text(body, encoding="utf-8")
+        self.vault._write(f"Projects/{self.active_slug}/.gt/plans/{plan_id}.md", body, op="replace-file")
         return {"status": "draft", "plan_id": plan_id, "path": str(plan_file)}
 
     async def implement_command(self, plan_id: str, phase: str = "") -> Dict[str, Any]:
