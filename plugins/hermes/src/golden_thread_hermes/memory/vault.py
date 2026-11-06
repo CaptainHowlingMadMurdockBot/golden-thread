@@ -2,20 +2,195 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Golden Thread queue + broker: all vault writes go through the spool
+# (gt_write_queue.py -> <vault>/Projects/golden-thread/spool/queue/<req>.json)
+# and are applied by gt_broker.py drain. This matches the upstream Golden Thread
+# concurrency model exactly and gives us conflict-escalation, deduplication,
+# and claim-respect for free.
+_GT_HOOKS_DIR = Path(os.environ.get(
+    "GT_HOOKS_DIR",
+    "/root/.claude/golden-thread/hooks",
+))
+GT_WRITE_QUEUE = _GT_HOOKS_DIR / "gt_write_queue.py"
+GT_BROKER = _GT_HOOKS_DIR / "gt_broker.py"
+
+
+class VaultWriteError(RuntimeError):
+    """A queued write could not be deposited or drained."""
+
+
+def _find_vault_root(start: Path) -> Path:
+    """Resolve the vault root for a write target -- the user-configured vault
+    if it has Projects/golden-thread, else the GT_VAULT env, else ~/.claude/vault-config.json."""
+    if start and (start / "Projects" / "golden-thread").exists():
+        return start
+    env = os.environ.get("GT_VAULT")
+    if env and (Path(env) / "Projects" / "golden-thread").exists():
+        return Path(env)
+    try:
+        import json
+        cfg = json.loads((Path.home() / ".claude" / "vault-config.json").read_text())
+        candidate = Path(cfg.get("vault_path", ""))
+        if (candidate / "Projects" / "golden-thread").exists():
+            return candidate
+    except Exception:
+        pass
+    return start  # last-resort: the configured vault path
+
 
 class Vault:
-    """Read/write a Golden Thread vault on local disk."""
+    """Read/write a Golden Thread vault on local disk.
+
+    All writes go through the Golden Thread write-queue + broker spool. The
+    plugin never touches a vault file directly for writes -- it deposits a
+    JSON request into <vault>/Projects/golden-thread/spool/queue/ via
+    gt_write_queue.py, then waits for gt_broker.py drain to apply it. Reads
+    are direct; a drain-before-read helper is available for hot paths.
+    """
 
     def __init__(self, root: Path) -> None:
         self.root = Path(root).expanduser()
 
+    # -------------------------------------------------------------------
+    # Internal: queue + drain
+    # -------------------------------------------------------------------
+
+    def _queue_write(
+        self,
+        rel: str,
+        op: str,
+        content: str = "",
+        section: Optional[str] = None,
+        key: Optional[str] = None,
+        session: str = "hermes",
+    ) -> Dict[str, Any]:
+        """Deposit a write request with gt_write_queue.py. Returns the queue file path."""
+        if not GT_WRITE_QUEUE.exists():
+            raise VaultWriteError(f"gt_write_queue.py not found at {GT_WRITE_QUEUE}")
+        cmd: List[str] = [
+            sys.executable,
+            str(GT_WRITE_QUEUE),
+            "--vault", str(self.root),
+            "--path", rel,
+            "--op", op,
+            "--session", session,
+            "--origin", "session",
+            "--json",
+        ]
+        if op in ("append", "replace-section", "create", "replace-file"):
+            cmd += ["--content", content]
+        if section:
+            cmd += ["--section", section]
+        if key:
+            cmd += ["--key", key, "--value", content]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if proc.returncode != 0:
+            raise VaultWriteError(
+                f"gt_write_queue failed ({proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
+            )
+        try:
+            return {"ok": True, "result": __import__("json").loads(proc.stdout)}
+        except Exception:
+            return {"ok": True, "stdout": proc.stdout.strip()}
+
+    def _drain(self, dry_run: bool = False) -> Dict[str, Any]:
+        """Run gt_broker.py drain against this vault. Returns the parsed --json output."""
+        if not GT_BROKER.exists():
+            raise VaultWriteError(f"gt_broker.py not found at {GT_BROKER}")
+        cmd: List[str] = [sys.executable, str(GT_BROKER), "drain", "--vault", str(self.root), "--json"]
+        if dry_run:
+            cmd.append("--dry-run")
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        try:
+            return {"ok": proc.returncode == 0, "exit": proc.returncode,
+                    "result": __import__("json").loads(proc.stdout) if proc.stdout.strip() else {}}
+        except Exception:
+            return {"ok": proc.returncode == 0, "exit": proc.returncode,
+                    "stdout": proc.stdout.strip(), "stderr": proc.stderr.strip()}
+
+    def _write(
+        self,
+        rel: str,
+        data: str,
+        op: str = "replace-file",
+        section: Optional[str] = None,
+        key: Optional[str] = None,
+        drain: bool = True,
+    ) -> str:
+        """Write a vault file via the queue (+ optional drain). Returns the broker outcome."""
+        rel = str(rel).replace("\\", "/")
+        self._queue_write(rel, op, content=data, section=section, key=key)
+        if drain:
+            self._drain(dry_run=False)
+        return "queued"
+
+    def _drain_if_outstanding(self) -> None:
+        """Cheap status check + drain if anything is pending. Used before read-heavy ops."""
+        if not GT_BROKER.exists():
+            return
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(GT_BROKER), "status", "--vault", str(self.root), "--json"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                status = __import__("json").loads(proc.stdout)
+                # If there's anything queued, drain it now.
+                # Broker's --json status keys: {"pending": N, "oldest": ..., "inbox": N, "files": []}
+                queued = status.get("pending", status.get("queued", 0)) if isinstance(status, dict) else 0
+                if queued and int(queued) > 0:
+                    # Retries are handled inside the broker itself (flock + lock-wait);
+                    # a drain that still fails is surfaced by _drain()'s error path.
+                    res = self._drain(dry_run=False)
+                    if not res.get("ok") and res.get("exit") not in (0, None):
+                        raise VaultWriteError(f"drain failed: {res}")
+        except Exception:
+            pass
+
     def core_path(self) -> Path:
         return self.root / "Core.md"
+
+    async def keyword_recall(
+        self,
+        question: str,
+        lineage: str = "",
+        active_project: str = "",
+        k: int = 10,
+    ) -> Dict[str, Any]:
+        """Vault lookup through the vault's own read tool (gt_keyword_recall.py).
+
+        Returns {"results": [rel paths, best first], "scores": {...}, "read": [...],
+        "locked": [...]}, matching gt-query's retrieval path.
+        """
+        recall_script = _GT_HOOKS_DIR / "gt_keyword_recall.py"
+        if not recall_script.exists():
+            # Fall back to the naive scan if the recall tool is absent.
+            return await self.query(question, lineage=lineage, active_project=active_project)
+        import json as _json
+        proc = subprocess.run(
+            [sys.executable, str(recall_script), question, "--vault", str(self.root), "--k", str(k), "--json"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if proc.returncode != 0:
+            return {"status": "error", "detail": proc.stderr.strip() or proc.stdout.strip(), "query": question}
+        try:
+            data = _json.loads(proc.stdout)
+        except Exception:
+            return {"status": "error", "detail": f"unparseable recall output: {proc.stdout[:200]}", "query": question}
+        # Filter by lineage (project) when given; keep the active project first.
+        results = data.get("results", [])
+        if lineage:
+            results = [r for r in results if r.startswith(f"Projects/{lineage}/") or not r.startswith("Projects/")]
+        if active_project:
+            results.sort(key=lambda r: (not r.startswith(f"Projects/{active_project}/"),))
+        return {"status": "ok", "query": question, **data, "results": results}
 
     def inbox_path(self) -> Path:
         return self.root / "Inbox.md"
@@ -71,6 +246,7 @@ class Vault:
     # -----------------------------------------------------------------------
 
     async def query(self, q: str, lineage: str = "", active_project: str = "") -> Dict[str, Any]:
+        self._drain_if_outstanding()
         qlower = q.lower()
         matches: List[Dict[str, Any]] = []
         for path in self._all_markdown():
@@ -99,6 +275,7 @@ class Vault:
     # -----------------------------------------------------------------------
 
     async def lint_command(self, fix: bool = False) -> Dict[str, Any]:
+        self._drain_if_outstanding()
         issues: List[Dict[str, Any]] = []
         for path in self._all_markdown():
             try:
@@ -190,7 +367,7 @@ class Vault:
                     skip = False
                 else:
                     new_lines.append(line)
-            path.write_text("\n".join(new_lines), encoding="utf-8")
+            self._write(str(rel), "\n".join(new_lines), op="replace-file")
             removals.append(str(rel))
         return {"status": "ok", "changed_lines": changed, "files": removals}
 
@@ -282,8 +459,7 @@ class Vault:
             if not yaml:
                 return {"status": "error", "detail": "PyYAML not available"}
             data[set_key] = set_value
-            with open(path, "w", encoding="utf-8") as f:
-                yaml.dump(data, f, default_flow_style=False)
+            self._write(str(path.relative_to(self.root)), yaml.dump(data, default_flow_style=False), op="replace-file")
         return {"status": "ok", "settings": data if view else None, "changed": bool(set_key)}
 
     # -----------------------------------------------------------------------
@@ -291,6 +467,7 @@ class Vault:
     # -----------------------------------------------------------------------
 
     async def context_command(self) -> Dict[str, Any]:
+        self._drain_if_outstanding()
         core = self.read_core()
         projects = self.list_projects()
         memory = []
@@ -306,6 +483,7 @@ class Vault:
         }
 
     async def validate_command(self, claim: str) -> Dict[str, Any]:
+        self._drain_if_outstanding()
         qlower = claim.lower()
         confirming = []
         contradicting = []
@@ -338,10 +516,11 @@ class Vault:
         if file_path:
             record += f" file={file_path}"
         record += "\n"
-        (validation_dir / "validations.md").write_text(record, encoding="utf-8")
+        self._write("Validations/validations.md", record, op="append")
         return {"status": "recorded", "claim": claim}
 
     async def optimize_command(self, member: str = "vault", apply: bool = False) -> Dict[str, Any]:
+        self._drain_if_outstanding()
         files = self._all_markdown()
         total = sum(f.stat().st_size for f in files if f.is_file())
         duplicates: List[Dict[str, Any]] = []
@@ -360,12 +539,14 @@ class Vault:
         return {"status": "ok", "member": member, "total_bytes": total, "duplicates": duplicates, "apply": apply}
 
     async def scan_command(self, path: str = "") -> Dict[str, Any]:
+        self._drain_if_outstanding()
         target = self.root / path if path else self.root
         if not target.exists():
             return {"status": "error", "detail": f"Path not found: {path}"}
         return {"status": "ok", "path": str(target), "note": "Scan uses project language definitions; no automatic fix applied."}
 
     async def allin_command(self) -> Dict[str, Any]:
+        self._drain_if_outstanding()
         lint = await self.lint_command(fix=False)
         doctor = await self.doctor_command()
         optimize = await self.optimize_command(member="vault", apply=False)
@@ -399,6 +580,7 @@ class Vault:
     # -----------------------------------------------------------------------
 
     async def runbook_lint_command(self) -> Dict[str, Any]:
+        self._drain_if_outstanding()
         runbooks = []
         for pdir in self.projects_dir().iterdir():
             if not pdir.is_dir():
@@ -409,6 +591,7 @@ class Vault:
         return {"status": "ok", "runbooks": runbooks}
 
     async def digest_command(self, file_path: str) -> Dict[str, Any]:
+        self._drain_if_outstanding()
         target = Path(file_path)
         if not target.is_absolute():
             target = self.root / target
@@ -434,7 +617,7 @@ class Vault:
         for name in ["Core.md", "Inbox.md", "Memory", "Projects", "Knowledge", "Sources", "Daily", "Validations"]:
             if name.endswith(".md"):
                 if not (self.root / name).exists():
-                    (self.root / name).write_text(f"# {name[:-3]}\n\n", encoding="utf-8")
+                    self._write(name, f"# {name[:-3]}\n\n", op="replace-file")
             else:
                 self.ensure_dir(self.root / name)
         return {"status": "ok", "vault": str(self.root), "modules": modules or [], "security": security}
@@ -491,7 +674,7 @@ class Vault:
 
     async def wiki_init_command(self) -> Dict[str, Any]:
         self.ensure_dir(self.wiki_dir())
-        (self.wiki_dir() / "index.md").write_text("# Golden Thread Wiki\n\n", encoding="utf-8")
+        self._write(str(self.wiki_dir().relative_to(self.root) / "index.md"), "# Golden Thread Wiki\n\n", op="replace-file")
         return {"status": "ok", "wiki": str(self.wiki_dir())}
 
     async def wiki_ingest_command(self, source: str) -> Dict[str, Any]:
@@ -529,7 +712,7 @@ class Vault:
             f"`delegate_task(goal={task!r})`\n\n"
             "Place results in this vault under Knowledge or the active project.\n"
         )
-        task_file.write_text(body, encoding="utf-8")
+        self._write(str(task_file.relative_to(self.root)), body, op="replace-file")
         return {
             "status": "ok",
             "task_id": task_id,
@@ -568,7 +751,7 @@ class Vault:
             safe_event = e["event"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             body_lines.append(f"<li><strong>{e['project']}</strong>: {safe_event}</li>")
         body_lines.extend(["</ul>", "</body></html>"])
-        html.write_text("\n".join(body_lines), encoding="utf-8")
+        self._write(str(html.relative_to(self.root)), "\n".join(body_lines), op="replace-file")
         return {"status": "ok", "file": str(html.relative_to(self.root)), "events": len(events), "redact": redact}
 
     async def visualize_command(self, target: str = "", redact: bool = False) -> Dict[str, Any]:
@@ -593,12 +776,12 @@ class Vault:
             nodes.append(f"    {node_id}[\"{name}\"]")
             links.append(f"    {root_name} --> {node_id}")
         body_lines = ["# Golden Thread Visualize", "", "```mermaid", "graph TD"] + nodes + links + ["```", ""]
-        md.write_text("\n".join(body_lines), encoding="utf-8")
+        self._write(str(md.relative_to(self.root)), "\n".join(body_lines), op="replace-file")
         html = self.root / ".gt" / "visualize.html"
-        html.write_text(
+        self._write(str(html.relative_to(self.root)),
             "<html><body><h1>Golden Thread Visualize</h1>"
             f"<pre>{chr(10).join(body_lines)}</pre></body></html>",
-            encoding="utf-8",
+            op="replace-file",
         )
         return {"status": "ok", "markdown": str(md.relative_to(self.root)), "html": str(html.relative_to(self.root)), "nodes": len(nodes), "redact": redact}
 
@@ -612,7 +795,7 @@ class Vault:
         self.ensure_dir(wf_dir)
         wf_file = wf_dir / f"{self.slugify(name)}.yaml"
         if save:
-            wf_file.write_text(f"name: {name}\nsteps: []\n", encoding="utf-8")
+            self._write(str(wf_file.relative_to(self.root)), f"name: {name}\nsteps: []\n", op="replace-file")
         executed: List[str] = []
         if run and wf_file.exists():
             import yaml
@@ -639,8 +822,7 @@ class Vault:
         self.ensure_dir(lotr_dir)
         ts = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
         record = lotr_dir / "requests.md"
-        with open(record, "a", encoding="utf-8") as f:
-            f.write(f"- {ts}: service={service} operation={operation}\n")
+        self._write(str(record.relative_to(self.root)), f"- {ts}: service={service} operation={operation}\n", op="append")
         return {
             "status": "ok",
             "service": service,
@@ -653,7 +835,7 @@ class Vault:
         self.ensure_dir(lotr_dir)
         findings = lotr_dir / "research.md"
         if not findings.exists():
-            findings.write_text(f"# LOTR Research: {service}\n\nAdd findings here.\n", encoding="utf-8")
+            self._write(str(findings.relative_to(self.root)), f"# LOTR Research: {service}\n\nAdd findings here.\n", op="replace-file")
         return {
             "status": "ok",
             "service": service,
