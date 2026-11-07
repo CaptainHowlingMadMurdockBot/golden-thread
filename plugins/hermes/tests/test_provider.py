@@ -45,3 +45,19 @@ def test_provider_system_prompt(tmp_vault):
     json.loads(p.handle_tool_call('gt_open', {'project_slug': 'demo'}))
     prefetch = p.prefetch("status")
     assert 'demo' in prefetch
+
+
+def test_handle_tool_call_inside_running_event_loop(tmp_vault):
+    """Regression (2026-11-07): Hermes' desktop/gateway executor calls the sync
+    provider handle_tool_call INSIDE a running event loop, where asyncio.run()
+    raises 'RuntimeError: cannot be called from a running event loop'. The
+    provider must bridge to its own loop instead of failing every gt_* call."""
+    import asyncio
+    p = make_provider(tmp_vault)
+
+    async def drive():
+        return p.handle_tool_call('gt_list', {})
+
+    res = json.loads(asyncio.run(drive()))
+    assert 'error' not in res, f"gt_list failed inside running loop: {res}"
+    assert isinstance(res.get('projects'), list)
