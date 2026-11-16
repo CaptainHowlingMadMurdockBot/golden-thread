@@ -21,6 +21,7 @@ class CommandContext:
     vault_path: Any  # Vault instance, set lazily in provider
     project_manager: Any  # ProjectManager instance
     config: Any  # GoldenThreadConfig instance
+    session_id: str = ""  # runtime session id, for session-aware commands
 
 
 @dataclass
@@ -96,6 +97,10 @@ async def _gt_route(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]
 # Vault maintenance commands
 async def _gt_query(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
     return await ctx.project_manager.query_command(args.get("q", ""), args.get("lineage", ""))
+
+
+async def _gt_recall(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
+    return await ctx.vault_path.recall(args.get("question", ""), int(args.get("k", 8)))
 
 
 async def _gt_lint(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -227,7 +232,7 @@ async def _gt_digest(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any
 
 
 async def _gt_minimize(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
-    return await ctx.project_manager.minimize_command()
+    return await ctx.project_manager.minimize_command(session_id=ctx.session_id)
 
 
 # Setup / init / calibrate / grant / help
@@ -339,6 +344,7 @@ COMMANDS: List[Command] = [
 
     # Vault maintenance
     Command("gt_query", "Look something up in the vault by keyword or lineage.", {"q": {"type": "string"}, "lineage": {"type": "string"}}, ["q"], _gt_query),
+    Command("gt_recall", "Rank vault pages for a question by relevance (BM25 via upstream gt-recall).", {"question": {"type": "string"}, "k": {"type": "integer"}}, ["question"], _gt_recall),
     Command("gt_lint", "Audit the vault for structural problems.", {"apply": {"type": "boolean"}}, [], _gt_lint),
     Command("gt_sync", "Vault git sync: status, pull, or push.", {"action": {"type": "string", "enum": ["status", "pull", "push"]}}, ["action"], _gt_sync),
     Command("gt_forget", "Retract a wrong fact across the vault.", {"claim": {"type": "string"}, "reason": {"type": "string"}}, ["claim"], _gt_forget),
@@ -369,7 +375,7 @@ COMMANDS: List[Command] = [
     Command("gt_context", "Render the vault's model-reachable definitions.", {}, [], _gt_context),
     Command("gt_runbook_lint", "Scan project runbooks for duplicated content.", {}, [], _gt_runbook_lint),
     Command("gt_digest", "Have a large file or paste read and summarized cheaply.", {"file": {"type": "string"}}, ["file"], _gt_digest),
-    Command("gt_minimize", "Prune a heavy session before cutting it.", {}, [], _gt_minimize),
+    Command("gt_minimize", "Measure this session (turns, tokens, cache warmth) and today's vault trail before cutting; returns the pre-close triage list.", {}, [], _gt_minimize),
 
     # Setup / init / calibrate / grant / help
     Command("gt_setup", "Finish a Golden Thread install by choosing modules and security level.", {"modules": {"type": "array", "items": {"type": "string"}}, "security": {"type": "string"}}, [], _gt_setup),

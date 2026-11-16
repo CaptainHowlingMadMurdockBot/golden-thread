@@ -21,7 +21,7 @@ def test_provider_schemas(tmp_vault):
     p = make_provider(tmp_vault)
     schemas = p.get_tool_schemas()
     names = sorted([s['name'] for s in schemas])
-    assert len(names) == 52
+    assert len(names) == 53
     # All canonical Claude Code commands are present
     canonical = [
         'gt_allin', 'gt_allin_commit', 'gt_brief', 'gt_calibrate', 'gt_close',
@@ -29,8 +29,8 @@ def test_provider_schemas(tmp_vault):
         'gt_farm', 'gt_forget', 'gt_grant', 'gt_handle', 'gt_help',
         'gt_implement', 'gt_ingest', 'gt_init', 'gt_lint', 'gt_list',
         'gt_minimize', 'gt_open', 'gt_optimize', 'gt_plan', 'gt_promote',
-        'gt_query', 'gt_refresh', 'gt_review', 'gt_route', 'gt_runbook_lint',
-        'gt_scan', 'gt_settings', 'gt_setup', 'gt_sync', 'gt_upgrade',
+        'gt_query', 'gt_recall', 'gt_refresh', 'gt_review', 'gt_route',
+        'gt_runbook_lint', 'gt_scan', 'gt_settings', 'gt_setup', 'gt_sync',
         'gt_validate', 'gt_validation', 'gt_watch', 'gt_work',
     ]
     for name in canonical:

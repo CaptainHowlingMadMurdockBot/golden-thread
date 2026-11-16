@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import subprocess
 import sys
@@ -20,6 +21,31 @@ _GT_HOOKS_DIR = Path(os.environ.get(
 ))
 GT_WRITE_QUEUE = _GT_HOOKS_DIR / "gt_write_queue.py"
 GT_BROKER = _GT_HOOKS_DIR / "gt_broker.py"
+GT_RECALL = _GT_HOOKS_DIR / "gt_recall.py"
+
+
+def _find_recall_script() -> Optional[Path]:
+    """Locate the upstream gt-recall script (BM25 vault search).
+
+    Order: (1) an installed hooks copy, if the gt-recall module has been
+    installed; (2) the repo-bundled golden-thread-recall release, newest
+    version. Returns None when neither exists.
+    """
+    if GT_RECALL.exists():
+        return GT_RECALL
+    repo_root = Path(__file__).resolve().parents[5]
+    recall_dir = repo_root / "golden-thread-plugin" / "golden-thread-recall"
+    if recall_dir.is_dir():
+        candidates = []
+        for entry in recall_dir.iterdir():
+            parts = entry.name.split(".")
+            if entry.is_dir() and len(parts) == 3 and all(p.isdigit() for p in parts):
+                candidates.append((tuple(int(p) for p in parts), entry))
+        for _, newest in sorted(candidates, reverse=True):
+            script = newest / "scripts" / "gt_recall.py"
+            if script.exists():
+                return script
+    return None
 
 
 class VaultWriteError(RuntimeError):
@@ -283,6 +309,42 @@ class Vault:
         if active_project:
             matches.sort(key=lambda m: (m["project"] != active_project, str(m["path"])))
         return {"count": len(matches), "matches": matches[:20]}
+
+    async def recall(self, question: str, k: int = 8) -> Dict[str, Any]:
+        """Rank vault pages for a question via the upstream gt-recall module (BM25).
+
+        Much better for natural-language questions than the substring match in
+        query(): recall scores term frequency across the whole vault.
+        """
+        if not question.strip():
+            return {"status": "error", "detail": "recall needs a non-empty question"}
+        script = _find_recall_script()
+        if script is None:
+            return {
+                "status": "error",
+                "detail": (
+                    "gt_recall.py not found: neither the installed hooks copy "
+                    f"({GT_RECALL}) nor golden-thread-plugin/golden-thread-recall/*/scripts"
+                ),
+            }
+        try:
+            k = max(1, int(k))
+        except (TypeError, ValueError):
+            k = 8
+        cmd = [sys.executable, str(script), question, "--vault", str(self.root), "--k", str(k), "--json"]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return {"status": "error", "detail": "gt_recall timed out after 60s"}
+        if proc.returncode != 0:
+            return {
+                "status": "error",
+                "detail": f"gt_recall failed ({proc.returncode}): {(proc.stderr or proc.stdout).strip()}",
+            }
+        try:
+            return {"status": "ok", **json.loads(proc.stdout)}
+        except (ValueError, TypeError):
+            return {"status": "ok", "stdout": proc.stdout.strip()}
 
     # -----------------------------------------------------------------------
     # Lint
