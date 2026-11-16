@@ -228,7 +228,21 @@ class Vault:
         projects = self.projects_dir()
         if not projects.exists():
             return []
-        return sorted([p.name for p in projects.iterdir() if p.is_dir() and not p.name.startswith(".")])
+        names: List[str] = []
+        for p in projects.iterdir():
+            if not p.is_dir() or p.name.startswith("."):
+                continue
+            names.append(p.name)
+            # Sub-projects created with --parent nest one level deeper
+            # (Projects/<parent>/<child>) and are referenced upstream as
+            # "parent/child" (gt_handoff_status --project, gt_daily).
+            # One level only: upstream gt does not nest deeper.
+            for child in p.iterdir():
+                if not child.is_dir() or child.name.startswith("."):
+                    continue
+                if (child / "README.md").exists() or (child / "idea.md").exists():
+                    names.append(f"{p.name}/{child.name}")
+        return sorted(names)
 
     def project_path(self, slug: str) -> Path:
         return self.projects_dir() / slug
