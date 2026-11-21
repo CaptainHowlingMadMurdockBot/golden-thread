@@ -1,0 +1,736 @@
+{
+  "generated": "2026-11-21T03:56:05+00:00",
+  "source_commit": "6944e781657d8f5b26af1a334ff1aec3d5c65993",
+  "command_count": 53,
+  "write_to_active_commands": [
+    "gt_complete",
+    "gt_decide",
+    "gt_handle",
+    "gt_implement",
+    "gt_plan",
+    "gt_review",
+    "gt_validate",
+    "gt_validation",
+    "gt_work",
+    "gt_workflow"
+  ],
+  "commands": [
+    {
+      "name": "gt_open",
+      "description": "Activate a Golden Thread project by slug.",
+      "parameters": {
+        "project_slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_slug"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_list",
+      "description": "List all Golden Thread projects in the vault.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_create",
+      "description": "Create a new Golden Thread project.",
+      "parameters": {
+        "name": {
+          "type": "string"
+        },
+        "idea": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "idea"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_work",
+      "description": "Append a timestamped progress entry to the active project's log.",
+      "parameters": {
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_decide",
+      "description": "Record an Architecture Decision Record for the active project.",
+      "parameters": {
+        "title": {
+          "type": "string"
+        },
+        "context": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string"
+        },
+        "consequences": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "context",
+        "decision",
+        "consequences"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_close",
+      "description": "Close the active Golden Thread session/project claim.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_route",
+      "description": "Mid-session routing check: where does this session's output belong?",
+      "parameters": {
+        "session_so_far": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_query",
+      "description": "Look something up in the vault by keyword or lineage.",
+      "parameters": {
+        "q": {
+          "type": "string"
+        },
+        "lineage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "q"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_recall",
+      "description": "Rank vault pages for a question by relevance (BM25 via upstream gt-recall).",
+      "parameters": {
+        "question": {
+          "type": "string"
+        },
+        "k": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_lint",
+      "description": "Audit the vault for structural problems.",
+      "parameters": {
+        "apply": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_sync",
+      "description": "Vault git sync: status, pull, or push.",
+      "parameters": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "status",
+            "pull",
+            "push"
+          ]
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_forget",
+      "description": "Retract a wrong fact across the vault.",
+      "parameters": {
+        "claim": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_promote",
+      "description": "Graduate content up the memory hierarchy.",
+      "parameters": {
+        "source": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "to"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_demote",
+      "description": "Move content down the memory hierarchy.",
+      "parameters": {
+        "source": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "to"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_refresh",
+      "description": "Check Sources/ for upstream changes.",
+      "parameters": {
+        "apply": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_upgrade",
+      "description": "Bring an existing vault up to the installed release.",
+      "parameters": {
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_doctor",
+      "description": "One report for the whole install and vault.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_settings",
+      "description": "View or change Golden Thread settings.",
+      "parameters": {
+        "view": {
+          "type": "boolean"
+        },
+        "set": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_handle",
+      "description": "Work through a set of tasks or handoffs one at a time.",
+      "parameters": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "tasks",
+            "handoffs"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_complete",
+      "description": "Complete a project, task, or handoff.",
+      "parameters": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "project",
+            "task",
+            "handoff"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "move": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_review",
+      "description": "Empty the inbox and route captured items into projects.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_plan",
+      "description": "Write a phased, test-first plan for an upcoming change.",
+      "parameters": {
+        "requirement": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirement"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_implement",
+      "description": "Run an approved plan one phase at a time.",
+      "parameters": {
+        "plan_id": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_validate",
+      "description": "Verify a claim by re-deriving it with fresh context.",
+      "parameters": {
+        "claim": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_validation",
+      "description": "Record what a validation established or could not determine.",
+      "parameters": {
+        "claim": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_optimize",
+      "description": "Find context costs and duplicated facts in the vault.",
+      "parameters": {
+        "member": {
+          "type": "string",
+          "enum": [
+            "vault",
+            "session",
+            "execution"
+          ]
+        },
+        "apply": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_scan",
+      "description": "Scan code against language definitions in effect.",
+      "parameters": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_allin",
+      "description": "Run every check in one command (reporting only).",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_allin_commit",
+      "description": "Commit once checks pass and a test receipt covers staged files.",
+      "parameters": {
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_brief",
+      "description": "Draft a self-contained CLAUDE.md section for a project.",
+      "parameters": {
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_context",
+      "description": "Render the vault's model-reachable definitions.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_runbook_lint",
+      "description": "Scan project runbooks for duplicated content.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_digest",
+      "description": "Have a large file or paste read and summarized cheaply.",
+      "parameters": {
+        "file": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "file"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_minimize",
+      "description": "Measure this session (turns, tokens, cache warmth) and today's vault trail before cutting; returns the pre-close triage list.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_setup",
+      "description": "Finish a Golden Thread install by choosing modules and security level.",
+      "parameters": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "security": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_init",
+      "description": "Create a new vault from scratch or wire an existing vault to a project.",
+      "parameters": {
+        "project": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_calibrate",
+      "description": "Run the model calibration pass now.",
+      "parameters": {
+        "estimate": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_grant",
+      "description": "Temporarily allow one command without lowering lockdown level.",
+      "parameters": {
+        "command": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "string"
+        },
+        "revoke": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_help",
+      "description": "List all available Golden Thread Hermes tools.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_ingest",
+      "description": "Bulk-import an existing project's memory files and notes.",
+      "parameters": {
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_wiki_init",
+      "description": "Initialize the Golden Thread wiki subsystem.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_wiki_ingest",
+      "description": "Ingest a source into the Golden Thread wiki.",
+      "parameters": {
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_wiki_lint",
+      "description": "Lint the Golden Thread wiki.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_wiki_refresh",
+      "description": "Refresh wiki pages from upstream sources.",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_watch",
+      "description": "Watch a git repo for security fixes or notable changes.",
+      "parameters": {
+        "repo": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "add",
+            "remove",
+            "list"
+          ]
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_farm",
+      "description": "Route a self-contained mechanical task to an external AI service.",
+      "parameters": {
+        "task": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_flow",
+      "description": "Render the vault's event stream as an offline HTML page.",
+      "parameters": {
+        "redact": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_visualize",
+      "description": "Render a codebase as a 3D walkthrough or code city.",
+      "parameters": {
+        "target": {
+          "type": "string"
+        },
+        "redact": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_workflow",
+      "description": "Save or run a chain of Golden Thread steps.",
+      "parameters": {
+        "name": {
+          "type": "string"
+        },
+        "run": {
+          "type": "boolean"
+        },
+        "save": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "writes_to_active": true
+    },
+    {
+      "name": "gt_lotr",
+      "description": "Call a connected service through the LOTR MCP gateway.",
+      "parameters": {
+        "service": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "consent": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "service",
+        "operation"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_lotr_research",
+      "description": "Research a service and produce a LOTR template + fact sheet.",
+      "parameters": {
+        "service": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "service"
+      ],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_usage",
+      "description": "Check Claude plan usage allowance (Hermes adapter returns local notes).",
+      "parameters": {},
+      "required": [],
+      "writes_to_active": false
+    },
+    {
+      "name": "gt_demo",
+      "description": "Run the Golden Thread guided tour on a fictional project.",
+      "parameters": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "start",
+            "tour",
+            "end",
+            "clean"
+          ]
+        }
+      },
+      "required": [],
+      "writes_to_active": false
+    }
+  ]
+}
