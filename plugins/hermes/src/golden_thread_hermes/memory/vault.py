@@ -283,6 +283,132 @@ class Vault:
         except Exception:
             return ""
 
+    # ---------------------------------------------------------------------
+    # Core-rules tier (vault core-rules/) — upstream parity
+    #
+    # hooks/inject_core_rules.sh (0.22.1) reads these files from the vault on
+    # every Claude Code turn. The adapter mirrors that pickup: the tier is
+    # located by its marker file, its files are core_*.md sorted, and the
+    # priority-model file describes the system rather than governing a turn.
+    # ---------------------------------------------------------------------
+
+    _CORE_RULES_MARKER = "core_rule_priority_model.md"
+    # gt_paths.LITE_RULES (0.22.1): the four rules `rules_set: lite` keeps.
+    # Read here, not re-invented — the vault .md files remain the source of truth.
+    _LITE_RULES = (
+        "core_concurrent_session_claim",
+        "core_no_secrets_in_transcript",
+        "core_test_before_commit",
+        "core_verification_state",
+    )
+
+    def core_rules_path(self) -> Path:
+        return self.root / "core-rules"
+
+    def _core_rules_tier(self) -> Path | None:
+        """The core-rules/ tier iff it matches upstream's locator contract:
+        find_core_rules (0.22.1) accepts the directory only when the
+        priority-model marker file sits inside it."""
+        tier = self.core_rules_path()
+        if tier.is_dir() and (tier / self._CORE_RULES_MARKER).is_file():
+            return tier
+        return None
+
+    @staticmethod
+    def _parse_rule(path: Path) -> Dict[str, Any]:
+        """Port of gt_paths.parse_rule (0.22.1).
+
+        Reads level / enforcement / imperative / inject / gated_by /
+        budget_from from frontmatter; the imperative falls back to the first
+        **bolded** statement in the body, so an edited .md stays the source
+        of truth for what gets injected.
+        """
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            return {}
+        out: Dict[str, Any] = {"name": path.stem}
+        m = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", text, re.S)
+        fm, body = (m.group(1), m.group(2)) if m else ("", text)
+        for key in ("level", "enforcement", "imperative", "inject", "gated_by", "budget_from"):
+            km = re.search(rf"^\s*{key}\s*:\s*(.+)$", fm, re.M)
+            if km:
+                out[key] = km.group(1).strip().strip("\"'")
+        if "imperative" not in out:
+            bm = re.search(r"\*\*(.+?)\*\*", body, re.S)
+            if bm:
+                out["imperative"] = " ".join(bm.group(1).split())
+        return out
+
+    def _settings_flat(self) -> Dict[str, Any]:
+        """Vault-local adapter settings (.gt/settings.yaml — gt_settings storage)
+        as a flat dict; unreadable is the same as unset."""
+        try:
+            import yaml
+        except ImportError:
+            return {}
+        try:
+            with open(self.settings_path(), "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def read_core_rules(self, max_lines: int = 200) -> str:
+        """Render the core-rules/ tier as numbered imperative lines — the same
+        text upstream injects every turn via inject_core_rules.sh: only
+        `level: core` rules carrying an imperative, `inject: false` and
+        settings-gated rules withheld, validated rules first, then by name.
+
+        Returns "" when the tier is absent or nothing qualifies; callers
+        announce that rather than silently skipping (upstream principle:
+        degradation is announced, not silent).
+        """
+        tier = self._core_rules_tier()
+        if tier is None:
+            return ""
+        settings = self._settings_flat()
+        picked: List[Dict[str, Any]] = []
+        for p in sorted(p for p in tier.glob("core_*.md") if p.is_file()):
+            if p.name == self._CORE_RULES_MARKER:
+                continue
+            r = self._parse_rule(p)
+            if r.get("level") != "core" or not r.get("imperative"):
+                continue
+            if str(r.get("inject", "")).lower() == "false":
+                continue
+            gate = r.get("gated_by")
+            # YAML 1.1 spells a bare `off` as boolean False; honour both spellings.
+            if gate and (settings.get(gate) is False or str(settings.get(gate, "")).lower() == "off"):
+                continue
+            picked.append(r)
+        if str(settings.get("rules_set", "")).lower() == "lite":
+            picked = [r for r in picked if r["name"] in self._LITE_RULES]
+        picked.sort(key=lambda r: (r.get("enforcement") != "validated", r["name"]))
+        if not picked:
+            return ""
+        # Header word-for-word from inject_core_rules.sh (0.22.1, line 232):
+        # `where` is the tier dir relative to the vault root, posix-style.
+        where = tier.relative_to(self.root).as_posix()
+        lines: List[str] = [f"CORE RULES (always on, every turn, every project — see {where}):"]
+        used = 1
+        withheld = 0
+        for i, r in enumerate(picked, 1):
+            rl = [f"{i}. {r['imperative']}"]
+            budget = r.get("budget_from")
+            value = settings.get(budget) if budget else None
+            if value not in (None, ""):
+                shown = "as many as the machine allows" if str(value) == "auto" else f"at most {value}"
+                rl.append(f"   ({budget}: {shown})")
+            if used + len(rl) > max_lines:
+                withheld = len(picked) - i + 1
+                break
+            lines.extend(rl)
+            used += len(rl)
+        if withheld:
+            lines.append(f"({withheld} core rules withheld: core_rules_max_lines cap reached)")
+        return "\n".join(lines)
+
     def list_projects(self) -> List[str]:
         projects = self.projects_dir()
         if not projects.exists():

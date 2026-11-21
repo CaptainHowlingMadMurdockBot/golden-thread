@@ -105,7 +105,7 @@ class GoldenThreadMemoryProvider(BaseMemoryProvider):
         self._hermes_home = str(kwargs.get("hermes_home", "") or "")
 
     def system_prompt_block(self) -> str:
-        core = self.vault.read_core()
+        core = self.vault.read_core(max_lines=self.config.core_rules_max_lines)
         if not core:
             return ""
         block = (
@@ -116,6 +116,22 @@ class GoldenThreadMemoryProvider(BaseMemoryProvider):
             "When the user says anything about a Golden Thread command (e.g., gt_*), "
             "call the matching tool."
         )
+        # Claude Code injects the vault's core-rules/ tier on EVERY turn
+        # (hooks/inject_core_rules.sh); system prompts in Hermes persist across
+        # compaction, so session-start injection is the adapter equivalent.
+        try:
+            rules = self.vault.read_core_rules(max_lines=self.config.core_rules_max_lines)
+        except Exception:  # never break session startup over the tier
+            rules = ""
+        if rules:
+            block += "\n\n" + rules
+        elif self.vault._core_rules_tier() is None:
+            # Announce, don't be silent (upstream: degradation is announced,
+            # not silent) — otherwise a vault without the tier reads as healthy.
+            block += (
+                "\n\n(core-rules/ directory not found in this vault; the per-turn "
+                "Core rules tier is not injected. gt upgrade adds it.)"
+            )
         try:
             pane = self._pane_block()
         except Exception:  # never break session startup over the pane offer

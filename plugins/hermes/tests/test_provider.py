@@ -277,3 +277,38 @@ def test_gt_minimize_tool_plumbs_session_id(tmp_vault):
     res = json.loads(p.handle_tool_call('gt_minimize', {}))
     assert res['session']['session_id'] == 'sess-9'
     assert 'no runtime state db' in res['session']['error']
+
+
+# --- core-rules tier surfaces in the system prompt (inject_core_rules.sh parity) ---
+
+def _seed_tier(vault, name='core_alpha', imperative='Alpha line.', enforcement='validated'):
+    d = vault / 'core-rules'
+    d.mkdir(exist_ok=True)
+    (d / 'core_rule_priority_model.md').write_text('marker\n')
+    (d / f'{name}.md').write_text(
+        '---\nmetadata:\n  level: core\n'
+        f'  enforcement: {enforcement}\nimperative: "{imperative}"\n---\n')
+
+def test_provider_system_prompt_includes_core_rules(tmp_vault):
+    _seed_tier(tmp_vault)
+    p = make_provider(tmp_vault)
+    block = p.system_prompt_block()
+    assert 'CORE RULES (always on, every turn, every project — see core-rules):' in block
+    assert '1. Alpha line.' in block
+    assert 'core-rules/ directory not found' not in block
+
+def test_provider_system_prompt_announces_missing_tier(tmp_vault):
+    p = make_provider(tmp_vault)  # fixture vault has Core.md but no core-rules/
+    block = p.system_prompt_block()
+    assert 'CORE RULES (always on' not in block
+    assert ('core-rules/ directory not found in this vault; the per-turn '
+            'Core rules tier is not injected. gt upgrade adds it.') in block
+
+def test_provider_system_prompt_survives_tier_read_failure(tmp_vault):
+    _seed_tier(tmp_vault)
+    p = make_provider(tmp_vault)
+    with patch.object(Vault, 'read_core_rules', side_effect=RuntimeError('boom')):
+        block = p.system_prompt_block()  # must not raise
+    assert 'When the user says anything about a Golden Thread command' in block
+    assert 'CORE RULES (always on' not in block
+    assert 'core-rules/ directory not found' not in block  # tier exists; read just failed
