@@ -22,6 +22,7 @@ class CommandContext:
     project_manager: Any  # ProjectManager instance
     config: Any  # GoldenThreadConfig instance
     session_id: str = ""  # runtime session id, for session-aware commands
+    session_claims: Any = None  # SessionClaims store, used by open/create/close
 
 
 @dataclass
@@ -60,7 +61,10 @@ async def _not_implemented(ctx: CommandContext, args: Dict[str, Any]) -> Dict[st
 
 # Core project / session commands
 async def _gt_open(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
-    return await ctx.project_manager.open_command(args.get("project_slug", ""), ctx.config)
+    return await ctx.project_manager.open_command(
+        args.get("project_slug", ""), ctx.config,
+        session_id=ctx.session_id, claims=ctx.session_claims,
+    )
 
 
 async def _gt_list(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -69,7 +73,8 @@ async def _gt_list(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _gt_create(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
     return await ctx.project_manager.create_command(
-        args.get("name", ""), args.get("idea", ""), ctx.config
+        args.get("name", ""), args.get("idea", ""), ctx.config,
+        session_id=ctx.session_id, claims=ctx.session_claims,
     )
 
 
@@ -87,7 +92,9 @@ async def _gt_decide(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any
 
 
 async def _gt_close(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
-    return await ctx.project_manager.close_command(ctx.config)
+    return await ctx.project_manager.close_command(
+        ctx.config, session_id=ctx.session_id, claims=ctx.session_claims,
+    )
 
 
 async def _gt_route(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:

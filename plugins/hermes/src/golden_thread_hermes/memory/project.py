@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import canonical
+from .session_claims import SessionClaims
 from .vault import Vault
 
 
@@ -33,12 +34,24 @@ class ProjectManager:
             raise FileNotFoundError(f"Project '{slug}' does not exist")
         self.active_slug = slug
 
-    async def open_command(self, slug: str, config: Any) -> Dict[str, Any]:
+    async def open_command(self, slug: str, config: Any, session_id: str = "",
+                           claims: Any = None) -> Dict[str, Any]:
         self.open(slug)
-        config.active_project = slug
-        config.save()
+        # Fresh-start (2026-11-20): nothing writes config.active_project.
+        # Sessions bind themselves via the per-session claim (scope: "session");
+        # no global seed exists anymore — opening here never follows other
+        # sessions and other sessions never follow this one.
+        session_scoped = False
+        if claims is not None and session_id:
+            claims.set(session_id, slug)
+            session_scoped = True
         ctx = self.read_context()
-        return {"status": "ok", "active_project": slug, "context_preview": ctx[:500]}
+        return {
+            "status": "ok",
+            "active_project": slug,
+            "scope": "session" if session_scoped else "local-open",
+            "context_preview": ctx[:500],
+        }
 
     def list(self) -> List[str]:
         return self.vault.list_projects()
@@ -68,11 +81,21 @@ class ProjectManager:
         self.active_slug = slug
         return slug
 
-    async def create_command(self, name: str, idea: str, config: Any) -> Dict[str, Any]:
+    async def create_command(self, name: str, idea: str, config: Any, session_id: str = "",
+                             claims: Any = None) -> Dict[str, Any]:
         slug = self.create(name, idea)
-        config.active_project = slug
-        config.save()
-        return {"status": "created", "project": slug, "path": str(self.vault.project_path(slug))}
+        # Fresh-start (2026-11-20): the claim is per-session only; no global
+        # seed write. See open_command.
+        session_scoped = False
+        if claims is not None and session_id:
+            claims.set(session_id, slug)
+            session_scoped = True
+        return {
+            "status": "created",
+            "project": slug,
+            "path": str(self.vault.project_path(slug)),
+            "scope": "session" if session_scoped else "local-open",
+        }
 
     def log(self, summary: str) -> None:
         self._require_active()
@@ -233,15 +256,27 @@ class ProjectManager:
     # Command handlers
     # -----------------------------------------------------------------------
 
-    async def close_command(self, config: Any) -> Dict[str, Any]:
+    async def close_command(self, config: Any, session_id: str = "",
+                            claims: SessionClaims | None = None) -> Dict[str, Any]:
+        """Release the calling session's claim. Without session context this is
+        the legacy global close: clears config.active_project for everyone."""
+        if claims is not None and session_id:
+            slug = claims.get(session_id)
+            if slug:
+                # Write the closeout note into the claimed project even if
+                # this PM instance was bound to a different (fallback) slug.
+                pm = self if self.active_slug == slug else ProjectManager(self.vault, slug)
+                pm.log(f"Session closed for {slug}")
+            claims.clear(session_id)
+            return {"status": "closed", "was_active": slug, "scope": "session"}
+        # Legacy global close (no session context): behave exactly as before.
         slug = self.active_slug
         if slug:
-            # Write a tiny session closeout note.
             self.log(f"Session closed for {slug}")
         config.active_project = ""
         config.save()
         self.active_slug = ""
-        return {"status": "closed", "was_active": slug}
+        return {"status": "closed", "was_active": slug, "scope": "global-fallback"}
 
     async def route_command(self, session_so_far: str) -> Dict[str, Any]:
         self._require_active()
@@ -540,18 +575,114 @@ class ProjectManager:
         ctx = self.read_context()
         return {"status": "ok", "project": slug, "brief": ctx[:2000]}
 
-    async def minimize_command(self) -> Dict[str, Any]:
+    async def minimize_command(
+        self, session_id: str = "", db_path: Optional[Path] = None
+    ) -> Dict[str, Any]:
+        """gt-minimize parity: measure this session and the day's vault trail
+        before the session is cut, so nothing is lost to compaction.
+
+        Real session stats come from the Hermes runtime state db. The triage
+        ritual (log decisions, register findings, tick tasks) stays with the
+        assistant — this command surfaces exactly what needs it.
+        """
         self._require_active()
         project_dir = self.vault.project_path(self.active_slug)
-        # Estimate vault bytes for this project.
-        total = sum(
-            f.stat().st_size for f in project_dir.rglob("*") if f.is_file()
-        )
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        # Day's vault trail: bullet entries already logged today.
+        log_file = project_dir / "Log" / f"{today}.md"
+        log_entries = 0
+        if log_file.exists():
+            log_entries = sum(
+                1
+                for ln in log_file.read_text(encoding="utf-8").splitlines()
+                if ln.strip().startswith(("-", "*"))
+            )
+
+        # Open tasks on the project README (canonical `## Tasks` rollup).
+        open_items = 0
+        readme = project_dir / "README.md"
+        if readme.exists():
+            open_items = sum(
+                1 for ln in readme.read_text(encoding="utf-8").splitlines() if ln.strip().startswith("- [ ]")
+            )
+
+        measurement = self._measure_session(session_id, db_path)
+        if "error" not in measurement:
+            msgs = measurement.get("messages", 0)
+            tin = measurement.get("input_tokens", 0)
+            warm = measurement.get("cache_reads_per_input", 0)
+            try:
+                self.log(f"minimize prep: session measured ≈{msgs} msgs, {tin:,} tok in, cache ×{warm}; {open_items} open tasks")
+            except Exception:
+                pass  # measurement already succeeded; never fail on logging
+
         return {
             "status": "ok",
             "project": self.active_slug,
-            "project_bytes": total,
-            "suggestion": (
-                "Consider moving stale Memory notes to Knowledge or archiving old Log files."
-            ),
+            "session": measurement,
+            "vault_log_entries_today": log_entries,
+            "open_tasks": open_items,
+            "triage": [
+                "Decisions -> gt_decide with context and consequences",
+                "Findings -> gt_work summaries (they land in today's Log)",
+                "In-flight work -> gt_task so the next session picks it up",
+                f"Open tasks: {open_items}; today's Log entries: {log_entries}",
+            ],
         }
+
+    # default: the Hermes runtime sqlite db (read-only)
+    @staticmethod
+    def runtime_db_path() -> Path:
+        return Path.home() / ".hermes" / "state.db"
+
+    def _measure_session(self, session_id: str, db_path: Optional[Path] = None) -> Dict[str, Any]:
+        import sqlite3
+
+        db_path = db_path or self.runtime_db_path()
+        out: Dict[str, Any] = {"session_id": session_id or None}
+        cols = (
+            "id, message_count, tool_call_count, input_tokens, output_tokens, "
+            "cache_read_tokens, cache_write_tokens, started_at, last_activity_at"
+        )
+        try:
+            if not db_path.exists():
+                out["error"] = f"no runtime state db at {db_path}"
+                return out
+            con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            try:
+                row = None
+                if session_id:
+                    row = con.execute(
+                        f"SELECT {cols} FROM sessions WHERE id = ?", (session_id,)
+                    ).fetchone()
+                if row is None:
+                    row = con.execute(
+                        f"SELECT {cols} FROM sessions WHERE archived = 0 "
+                        "ORDER BY last_activity_at DESC LIMIT 1",
+                        (),
+                    ).fetchone()
+            finally:
+                con.close()
+            if row is None:
+                out["error"] = "no session rows"
+                return out
+            (sid, msgs, tools, tin, tout, cr, cw, started, last) = row
+            out.update(
+                {
+                    "session_id": sid,
+                    "matched_by": "id" if session_id and sid == session_id else "newest",
+                    "messages": msgs or 0,
+                    "tool_calls": tools or 0,
+                    "input_tokens": tin or 0,
+                    "output_tokens": tout or 0,
+                    "cache_read_tokens": cr or 0,
+                    "cache_write_tokens": cw or 0,
+                    "started_at": started,
+                    "last_activity_at": last,
+                    "cache_reads_per_input": round((cr or 0) / max(tin or 0, 1), 1),
+                }
+            )
+        except Exception as exc:
+            out["error"] = f"measure failed: {exc}"
+        return out
