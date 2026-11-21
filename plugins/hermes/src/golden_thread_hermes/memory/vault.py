@@ -15,10 +15,48 @@ from typing import Any, Dict, List, Optional, Tuple
 # and are applied by gt_broker.py drain. This matches the upstream Golden Thread
 # concurrency model exactly and gives us conflict-escalation, deduplication,
 # and claim-respect for free.
-_GT_HOOKS_DIR = Path(os.environ.get(
-    "GT_HOOKS_DIR",
-    "/root/.claude/golden-thread/hooks",
-))
+def _default_hooks_dir() -> Path:
+    """Portable default for the installed upstream hooks dir."""
+    return Path.home() / ".claude" / "golden-thread" / "hooks"
+
+
+def _newest_bundled_release(submodule: str) -> Optional[Path]:
+    """Newest release dir under golden-thread-plugin/<submodule>/<version>/ in the repo tree."""
+    repo_root = Path(__file__).resolve().parents[5]
+    base = repo_root / "golden-thread-plugin" / submodule
+    if not base.is_dir():
+        return None
+    candidates = []
+    for entry in base.iterdir():
+        parts = entry.name.split(".")
+        if entry.is_dir() and len(parts) == 3 and all(p.isdigit() for p in parts):
+            candidates.append((tuple(int(p) for p in parts), entry))
+    if not candidates:
+        return None
+    return sorted(candidates, reverse=True)[0][1]
+
+
+def _resolve_engine_script(name: str) -> Path:
+    """Locate an upstream engine script (gt_write_queue.py / gt_broker.py).
+
+    Order: (1) GT_HOOKS_DIR env, (2) the installed hooks dir
+    (~/.claude/golden-thread/hooks), (3) the newest release bundled in the
+    repo tree. The bundled fallback lets a fresh install of this plugin run
+    without the upstream Claude Code plugin installed on the machine.
+    """
+    hooks_dir = Path(os.environ.get("GT_HOOKS_DIR") or _default_hooks_dir())
+    script = hooks_dir / name
+    if script.exists():
+        return script
+    bundled = _newest_bundled_release("golden-thread")
+    if bundled is not None:
+        candidate = bundled / "scripts" / name
+        if candidate.exists():
+            return candidate
+    return script  # nothing found: report the canonical hooks path
+
+
+_GT_HOOKS_DIR = Path(os.environ.get("GT_HOOKS_DIR") or _default_hooks_dir())
 GT_WRITE_QUEUE = _GT_HOOKS_DIR / "gt_write_queue.py"
 GT_BROKER = _GT_HOOKS_DIR / "gt_broker.py"
 GT_RECALL = _GT_HOOKS_DIR / "gt_recall.py"
@@ -33,19 +71,11 @@ def _find_recall_script() -> Optional[Path]:
     """
     if GT_RECALL.exists():
         return GT_RECALL
-    repo_root = Path(__file__).resolve().parents[5]
-    recall_dir = repo_root / "golden-thread-plugin" / "golden-thread-recall"
-    if recall_dir.is_dir():
-        candidates = []
-        for entry in recall_dir.iterdir():
-            parts = entry.name.split(".")
-            if entry.is_dir() and len(parts) == 3 and all(p.isdigit() for p in parts):
-                candidates.append((tuple(int(p) for p in parts), entry))
-        for _, newest in sorted(candidates, reverse=True):
-            script = newest / "scripts" / "gt_recall.py"
-            if script.exists():
-                return script
-    return None
+    recall_dir = _newest_bundled_release("golden-thread-recall")
+    if recall_dir is None:
+        return None
+    script = recall_dir / "scripts" / "gt_recall.py"
+    return script if script.exists() else None
 
 
 class VaultWriteError(RuntimeError):
@@ -98,11 +128,12 @@ class Vault:
         session: str = "hermes",
     ) -> Dict[str, Any]:
         """Deposit a write request with gt_write_queue.py. Returns the queue file path."""
-        if not GT_WRITE_QUEUE.exists():
-            raise VaultWriteError(f"gt_write_queue.py not found at {GT_WRITE_QUEUE}")
+        write_queue = _resolve_engine_script("gt_write_queue.py")
+        if not write_queue.exists():
+            raise VaultWriteError(f"gt_write_queue.py not found at {write_queue}")
         cmd: List[str] = [
             sys.executable,
-            str(GT_WRITE_QUEUE),
+            str(write_queue),
             "--vault", str(self.root),
             "--path", rel,
             "--op", op,
@@ -128,9 +159,10 @@ class Vault:
 
     def _drain(self, dry_run: bool = False) -> Dict[str, Any]:
         """Run gt_broker.py drain against this vault. Returns the parsed --json output."""
-        if not GT_BROKER.exists():
-            raise VaultWriteError(f"gt_broker.py not found at {GT_BROKER}")
-        cmd: List[str] = [sys.executable, str(GT_BROKER), "drain", "--vault", str(self.root), "--json"]
+        broker = _resolve_engine_script("gt_broker.py")
+        if not broker.exists():
+            raise VaultWriteError(f"gt_broker.py not found at {broker}")
+        cmd: List[str] = [sys.executable, str(broker), "drain", "--vault", str(self.root), "--json"]
         if dry_run:
             cmd.append("--dry-run")
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
@@ -159,11 +191,12 @@ class Vault:
 
     def _drain_if_outstanding(self) -> None:
         """Cheap status check + drain if anything is pending. Used before read-heavy ops."""
-        if not GT_BROKER.exists():
+        broker = _resolve_engine_script("gt_broker.py")
+        if not broker.exists():
             return
         try:
             proc = subprocess.run(
-                [sys.executable, str(GT_BROKER), "status", "--vault", str(self.root), "--json"],
+                [sys.executable, str(broker), "status", "--vault", str(self.root), "--json"],
                 capture_output=True, text=True, timeout=30,
             )
             if proc.returncode == 0 and proc.stdout.strip():

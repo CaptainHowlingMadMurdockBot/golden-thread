@@ -24,7 +24,7 @@ engine.
 | Vault writes | **Shared** — shells out to upstream engine | `hooks/gt_write_queue.py`, `hooks/gt_broker.py` |
 | Recall (BM25) | Shared (bundled copy) | `hooks/gt_recall.py` (preferred) or bundled `golden-thread-plugin/golden-thread-recall/<X.Y.Z>/scripts/gt_recall.py` |
 | Watch | Reimplemented | shares upstream state dir `~/.claude/golden-thread/watch` |
-| 52 gt commands | Reimplemented adapter-local | no upstream invocation |
+| 53 gt commands | Reimplemented adapter-local | no upstream invocation |
 | Session claims (multi-session guard) | Reimplemented | upstream has none today (see §3) |
 | Settings engine | Divergent | adapter writes a vault-local YAML upstream does not read (see §4) |
 
@@ -32,9 +32,13 @@ Everything else (guardrail hooks, unlock/crypto, farm, intake, ledger,
 agents/packs) is absent on the Hermes side today — adapter-side TODO, not an
 upstream requirement.
 
-Engine scripts live at `hooks/` under the installed plugin directory. The
-adapter resolves it via env `GT_HOOKS_DIR` (default
-`$(HOME)/.claude/golden-thread/hooks`).
+Engine scripts live at `hooks/` under the installed plugin directory. Hermes
+resolves each script in order: (1) env `GT_HOOKS_DIR` when it exists and
+contains the named script, (2) `$(HOME)/.claude/golden-thread/hooks` if
+present, (3) the newest bundled repo release,
+`golden-thread-plugin/golden-thread/<X.Y.Z>/scripts/` — so a fresh Hermes
+install runs with no upstream GT install on the machine. An env dir that
+lacks a script is treated as unset (falls through to the bundle).
 
 ## 2. Stability contracts the adapter depends on
 
@@ -46,7 +50,9 @@ adapter resolves it via env `GT_HOOKS_DIR` (default
   change breaks every Hermes vault write. If a change is unavoidable,
   version the spool format or gate it behind a setting.
 - **C2 (MUST) `GT_HOOKS_DIR` env override.** Adapters point integration at
-  arbitrary install locations by env. Keep it honored (or bless a
+  arbitrary install locations by env (Hermes semantics: an env dir that
+  lacks the script is treated as unset, falling through to a bundled copy).
+  Keep it honored (or bless a
   documented equivalent) wherever new engine defaults are added — never
   hardcode the `~/.claude` prefix inside engine logic.
 - **C3 (SHOULD) Engine-script discipline.** Host-agnostic engine scripts
@@ -59,7 +65,9 @@ adapter resolves it via env `GT_HOOKS_DIR` (default
 - **C4 (SHOULD) Recall location convention.** Either ship
   `hooks/gt_recall.py` in the standard install (that would immediately
   improve the Hermes side) or keep the bundled-release convention
-  `golden-thread-recall/<X.Y.Z>/scripts/gt_recall.py` stable.
+  `golden-thread-recall/<X.Y.Z>/scripts/gt_recall.py` stable. Hermes applies
+  the same bundled-release convention to the write engine
+  (`golden-thread/<X.Y.Z>/scripts/`), so keep that layout stable too.
 
 ## 3. Multi-client vault invariants (the "with Hermes in mind" core rule)
 
@@ -140,5 +148,6 @@ or deleted.
 
 ---
 *Verification basis: upstream hooks/ inventory and grep checks at 0.22.1;
-adapter source at commit 6944e78 (branch hermes-agent-fixes); live
-resolution tests of GT_HOOKS_DIR and the recall fallback.*
+adapter source on branch hermes-agent-fixes; behavior probes: cold-start
+write (queue + drain) and recall resolved from the bundled repo release with
+no upstream install present, GT_HOOKS_DIR override, home-relative default.*
