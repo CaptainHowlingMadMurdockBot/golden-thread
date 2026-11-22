@@ -24,3 +24,21 @@ def test_create_and_activate(tmp_vault):
     assert slug == 'other'
     assert pm.active_slug == 'other'
     assert (tmp_vault / 'Projects' / 'other' / 'idea.md').exists()
+
+def test_create_nested_slug_not_flattened(tmp_vault):
+    # Regression: gt_create('personal/finance') used to slugify away the '/'
+    # and create Projects/personalfinance (see rpg/scarlet-heroes, 2026-10-27).
+    v = Vault(str(tmp_vault))
+    pm = ProjectManager(v)
+    slug = pm.create('personal/finance', 'nested project')
+    assert slug == 'personal/finance'
+    assert (tmp_vault / 'Projects' / 'personal' / 'finance' / 'idea.md').exists()
+    assert not (tmp_vault / 'Projects' / 'personalfinance').exists()
+
+def test_slugify_path(tmp_vault):
+    v = Vault(str(tmp_vault))
+    assert v.slugify_path('personal/finance') == 'personal/finance'
+    assert v.slugify_path('My Fancy/ Project') == 'my-fancy/project'
+    assert v.slugify_path('single') == 'single'
+    assert v.slugify_path('trailing/') == 'trailing'
+    assert v.slugify_path('') == 'project'

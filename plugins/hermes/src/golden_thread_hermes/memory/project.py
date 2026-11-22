@@ -60,7 +60,7 @@ class ProjectManager:
         return self.list()
 
     def create(self, name: str, idea: str) -> str:
-        slug = self.vault.slugify(name)
+        slug = self.vault.slugify_path(name)
         project_dir = self.vault.project_path(slug)
         if project_dir.exists():
             base = slug

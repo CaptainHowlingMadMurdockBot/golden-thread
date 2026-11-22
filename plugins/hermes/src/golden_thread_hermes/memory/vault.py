@@ -437,6 +437,19 @@ class Vault:
         slug = re.sub(r"[-\s]+", "-", slug)
         return slug or "project"
 
+    def slugify_path(self, name: str) -> str:
+        """Slugify a possibly-nested name: '/' is a path separator, never stripped.
+
+        Upstream create-project (scripts/vault_init.py) takes the slug verbatim
+        and nests via --parent; this adapter used to strip '/' at project
+        creation, flattening 'parent/child' into 'parentchild'
+        (rpg/scarlet-heroes 2026-10-27, personal/finance 2026-11-22).
+        """
+        parts = [part for part in name.split("/") if part.strip()]
+        if not parts:
+            return "project"
+        return "/".join(self.slugify(part) for part in parts)
+
     def _all_markdown(self) -> List[Path]:
         return sorted(self.root.rglob("*.md"))
 
@@ -861,7 +874,7 @@ class Vault:
         await self.setup_command()
         result = {"status": "initialized", "vault": str(self.root)}
         if project:
-            slug = self.slugify(project)
+            slug = self.slugify_path(project)
             self.ensure_dir(self.project_path(slug))
             result["project"] = slug
         if repo:
