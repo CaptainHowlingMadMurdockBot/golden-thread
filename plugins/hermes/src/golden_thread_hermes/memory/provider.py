@@ -186,8 +186,9 @@ class GoldenThreadMemoryProvider(BaseMemoryProvider):
             f'::preview{{file="{pane_path}"}}\n'
             "Do not re-emit it on ordinary later turns. Pane button clicks arrive "
             'as hidden user turns beginning with "GT pane →" — perform the '
-            "requested gt action, then update the #gt-status div inside the pane "
-            "file so the result appears on the pane itself."
+            "requested gt action and report the result in chat. The pane is "
+            "static: never rewrite it (no #gt-status updates); the vault Log is "
+            "the record."
         )
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
