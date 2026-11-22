@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import canonical
+from .migration import seed_readme
 from .session_claims import SessionClaims
 from .vault import Vault
 
@@ -78,6 +79,10 @@ class ProjectManager:
         self.vault._write(f"Projects/{slug}/idea.md", f"# {name}\n\n{idea}\n", op="replace-file")
         self.vault._write(f"Projects/{slug}/CONVENTIONS.md", f"# CONVENTIONS\n\nProject-specific conventions for {name}.\n", op="replace-file")
         self.vault._write(f"Projects/{slug}/runbook.md", f"# Runbook: {name}\n\nOperational notes and recurring procedures.\n", op="replace-file")
+        # Canonical README.md skeleton at scaffold time: gt_task, minimize task
+        # rollups and resolve_project all expect README.md ## Tasks to exist
+        # (same canonical template as migration.seed_readme).
+        seed_readme(self.vault.root, slug)
         self.active_slug = slug
         return slug
 

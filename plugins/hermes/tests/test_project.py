@@ -35,6 +35,18 @@ def test_create_nested_slug_not_flattened(tmp_vault):
     assert (tmp_vault / 'Projects' / 'personal' / 'finance' / 'idea.md').exists()
     assert not (tmp_vault / 'Projects' / 'personalfinance').exists()
 
+def test_create_seeds_readme(tmp_vault):
+    # Regression: gt_create used to scaffold without README.md, which gt_task,
+    # minimize task rollups and resolve_project all require (## Tasks contract).
+    v = Vault(str(tmp_vault))
+    pm = ProjectManager(v)
+    slug = pm.create('nested/readme-test', 'readme scaffold check')
+    readme = tmp_vault / 'Projects' / 'nested' / 'readme-test' / 'README.md'
+    assert readme.exists()
+    text = readme.read_text()
+    assert '## Tasks' in text
+    assert f'slug: {slug}' in text
+
 def test_slugify_path(tmp_vault):
     v = Vault(str(tmp_vault))
     assert v.slugify_path('personal/finance') == 'personal/finance'
