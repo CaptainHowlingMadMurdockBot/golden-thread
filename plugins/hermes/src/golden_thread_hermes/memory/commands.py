@@ -49,8 +49,8 @@ class Command:
 
 
 # ---------------------------------------------------------------------------
-# Placeholder handlers — replaced with real implementations in commands_real.py
-# to keep this file a pure registry.
+# Real handlers — the COMMANDS registry below maps every /gt:* command onto
+# one of these; this file is both the handler set and the dispatch registry.
 # ---------------------------------------------------------------------------
 async def _not_implemented(ctx: CommandContext, args: Dict[str, Any]) -> Dict[str, Any]:
     return {

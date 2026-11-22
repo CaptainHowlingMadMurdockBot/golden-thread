@@ -57,8 +57,9 @@ def _resolve_engine_script(name: str) -> Path:
 
 
 _GT_HOOKS_DIR = Path(os.environ.get("GT_HOOKS_DIR") or _default_hooks_dir())
-GT_WRITE_QUEUE = _GT_HOOKS_DIR / "gt_write_queue.py"
-GT_BROKER = _GT_HOOKS_DIR / "gt_broker.py"
+# Engine scripts are resolved per-call via _resolve_engine_script/_find_recall_script
+# (env -> hooks dir -> newest bundled release); GT_RECALL below is the fast-path
+# used by _find_recall_script. Do not add module-level write-queue/broker paths.
 GT_RECALL = _GT_HOOKS_DIR / "gt_recall.py"
 
 
