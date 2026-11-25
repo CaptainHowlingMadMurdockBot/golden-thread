@@ -2,11 +2,49 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from hermes_cli.config import cfg_get
-from hermes_constants import get_hermes_home
+try:  # Unimportable on a stale/in-place-updated hermes install (2026-11-25
+    # incident: the editable finder never mapped hermes_yaml.py, so every
+    # import of hermes_cli.config died and the whole provider failed to load).
+    from hermes_cli.config import cfg_get
+except ImportError:
+    cfg_get = None
+
+try:
+    from hermes_constants import get_hermes_home
+except ImportError:
+    get_hermes_home = None
+
+
+def _hermes_home() -> Path:
+    if get_hermes_home is not None:
+        return get_hermes_home()
+    env = os.environ.get("HERMES_HOME", "")
+    return Path(env) if env else Path.home() / ".hermes"
+
+
+def _read_config_yaml(hermes_home: Path) -> dict:
+    """Direct config.yaml read (pyyaml is already a plugin dependency)."""
+    import yaml
+
+    try:
+        with open(hermes_home / "config.yaml", "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except OSError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _cfg_get(config: Any, *path: str, default: Any = None) -> Any:
+    node = config
+    for key in path:
+        if not isinstance(node, dict) or key not in node:
+            return default
+        node = node[key]
+    return node
 
 
 class GoldenThreadConfig:
@@ -40,15 +78,23 @@ class GoldenThreadConfig:
 
     @classmethod
     def load(cls) -> "GoldenThreadConfig":
-        from hermes_cli.config import load_config
-        config = load_config()
-        plugin_cfg = cfg_get(config, "plugins", "golden-thread", default={}) or {}
+        try:
+            from hermes_cli.config import load_config
+        except ImportError:
+            # Stale/broken hermes install: degrade to reading config.yaml
+            # directly instead of killing the whole provider import chain
+            # (2026-11-25 incident).
+            config = _read_config_yaml(_hermes_home())
+        else:
+            config = load_config()
+        getter = cfg_get if cfg_get is not None else _cfg_get
+        plugin_cfg = getter(config, "plugins", "golden-thread", default={}) or {}
         raw_path = plugin_cfg.get("vault_path", "")
         if raw_path:
             vault_path = Path(raw_path).expanduser()
         else:
             # Default to a subfolder inside the active profile's Obsidian vault.
-            hermes_home = get_hermes_home()
+            hermes_home = _hermes_home()
             vault_path = hermes_home.parent / "obsidian-vaults" / "eman-mobile" / cls.DEFAULT_VAULT_NAME
             if not vault_path.exists():
                 vault_path = Path("/mnt/obsidian-vaults/eman-mobile") / cls.DEFAULT_VAULT_NAME
@@ -63,9 +109,15 @@ class GoldenThreadConfig:
 
     def save(self) -> None:
         """Persist non-secret config to config.yaml."""
-        from hermes_cli.config import load_config
         import yaml
-        config = load_config()
+        try:
+            from hermes_cli.config import load_config
+        except ImportError:
+            # Degraded mode (stale/broken hermes install): mutate the raw
+            # config.yaml in place instead of failing the write entirely.
+            config = _read_config_yaml(_hermes_home())
+        else:
+            config = load_config()
         if "plugins" not in config:
             config["plugins"] = {}
         config["plugins"]["golden-thread"] = {
@@ -76,6 +128,6 @@ class GoldenThreadConfig:
             "ui_pane_path": self.ui_pane_path,
             "ui_pane_auto": self.ui_pane_auto,
         }
-        cfg_path = get_hermes_home() / "config.yaml"
+        cfg_path = _hermes_home() / "config.yaml"
         with open(cfg_path, "w", encoding="utf-8") as f:
             yaml.dump(config, f, default_flow_style=False)
